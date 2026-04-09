@@ -67,7 +67,7 @@ export function buildBrandedEmailTemplate({
   mascotPath = '/illustrations/feedback/verification-star.svg',
 }: BuildBrandedEmailTemplateArgs) {
   const publicSite = isPublicHttpUrl(siteUrl) && !siteUrl.includes('localhost')
-  const logoUrl = publicSite ? toAssetUrl(siteUrl, '/logo.png') : null
+  const logoUrl = 'https://showstellar.com/logo.png'
   const mascotUrl = mascotPath && publicSite ? toAssetUrl(siteUrl, mascotPath) : null
   const bodyHtml = formatBodyHtml(body)
 
@@ -77,7 +77,11 @@ export function buildBrandedEmailTemplate({
         <div style="height:8px;background:#001739;"></div>
         <div style="padding:32px 28px 28px 28px;">
           <div style="text-align:center;margin-bottom:22px;">
-            ${logoUrl ? `<img src="${escapeHtml(logoUrl)}" alt="ShowStellar" style="height:42px;width:auto;display:inline-block;margin-bottom:10px;" />` : `<div style="display:inline-block;padding:10px 18px;border-radius:999px;background:#001739;color:#ffffff;font-weight:700;letter-spacing:0.02em;font-size:18px;margin-bottom:10px;">ShowStellar</div>`}
+            <img
+              src="${escapeHtml(logoUrl)}"
+              alt="ShowStellar"
+              style="display:block;margin:0 auto 10px;max-width:180px;width:100%;height:auto;object-fit:contain;"
+            />
             ${mascotUrl ? `<img src="${escapeHtml(mascotUrl)}" alt="" style="height:52px;width:52px;display:block;margin:0 auto 6px;" />` : ''}
             <h2 style="color:#001739;margin:0;font-size:26px;line-height:1.25;font-weight:700;">${escapeHtml(title)}</h2>
             ${intro ? `<p style="margin:10px 0 0;color:#1a1a1a;font-size:15px;line-height:1.7;">${escapeHtml(intro)}</p>` : ''}
