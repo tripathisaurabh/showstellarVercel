@@ -1,7 +1,26 @@
 const DEFAULT_SITE_URL = 'http://localhost:3000'
+let warnedMissingSiteUrl = false
 
 export function getSiteUrl() {
-  return (process.env.NEXT_PUBLIC_SITE_URL ?? DEFAULT_SITE_URL).replace(/\/+$/, '')
+  const explicitSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim()
+  const vercelUrl = process.env.VERCEL_URL?.trim()
+
+  if (explicitSiteUrl) {
+    return explicitSiteUrl.replace(/\/+$/, '')
+  }
+
+  if (process.env.NODE_ENV === 'production' && vercelUrl) {
+    return `https://${vercelUrl.replace(/\/+$/, '')}`
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    if (!warnedMissingSiteUrl) {
+      warnedMissingSiteUrl = true
+      console.warn('[ShowStellar] NEXT_PUBLIC_SITE_URL is missing in production; falling back to localhost for generated URLs.')
+    }
+  }
+
+  return DEFAULT_SITE_URL.replace(/\/+$/, '')
 }
 
 export function absoluteUrl(path: string) {
