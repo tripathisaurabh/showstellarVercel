@@ -60,6 +60,19 @@ export default function ProfileEditorPage() {
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
+  function getSafeFileExtension(file: File) {
+    const rawExt = file.name.split('.').pop()?.trim().toLowerCase()
+    if (rawExt && rawExt.length <= 5) return rawExt
+
+    if (file.type === 'image/jpeg') return 'jpg'
+    if (file.type === 'image/png') return 'png'
+    if (file.type === 'image/webp') return 'webp'
+    if (file.type === 'image/gif') return 'gif'
+    if (file.type === 'video/mp4') return 'mp4'
+
+    return 'bin'
+  }
+
   useEffect(() => {
     async function load() {
       const supabase = getSupabase()
@@ -155,10 +168,11 @@ export default function ProfileEditorPage() {
     if (!file) return
     setUploadingDp(true)
     setError('')
+    const previousProfileImage = form.profile_image
     try {
       const supabase = getSupabase()
-      const ext = file.name.split('.').pop()
-      const path = `dp/${profileId}.${ext}`
+      const ext = getSafeFileExtension(file)
+      const path = `dp/${profileId}/${Date.now()}-${crypto.randomUUID()}.${ext}`
       const { error: uploadError } = await supabase.storage
         .from('artist-media')
         .upload(path, file, { upsert: true })
@@ -167,8 +181,12 @@ export default function ProfileEditorPage() {
       const { data: { publicUrl } } = supabase.storage.from('artist-media').getPublicUrl(path)
       set('profile_image', publicUrl)
 
-      await supabase.from('artist_profiles').update({ profile_image: publicUrl }).eq('id', profileId)
+      const { error: updateError } = await supabase.from('artist_profiles').update({ profile_image: publicUrl }).eq('id', profileId)
+      if (updateError) throw updateError
+
+      router.refresh()
     } catch (err: unknown) {
+      set('profile_image', previousProfileImage)
       setError(err instanceof Error ? err.message : 'Failed to upload profile image')
     } finally {
       setUploadingDp(false)
@@ -183,7 +201,7 @@ export default function ProfileEditorPage() {
     setError('')
     try {
       const supabase = getSupabase()
-      const ext = file.name.split('.').pop()
+      const ext = getSafeFileExtension(file)
       const path = `gallery/${profileId}/${Date.now()}.${ext}`
       const { error: uploadError } = await supabase.storage
         .from('artist-media')
