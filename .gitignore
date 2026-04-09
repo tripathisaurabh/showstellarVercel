@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+/node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -23,18 +23,41 @@
 # misc
 .DS_Store
 *.pem
+*.swp
+*.swo
+*.tmp
+*.bak
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
+debug-*.txt
+*_debug.txt
+*_debug.log
 
 # env files (can opt-in for committing if needed)
-.env*
-
+.env
+.env.*
+.env.local
 # vercel
 .vercel
+
+# workspace / agent artifacts
+.claude/
+.qodo/
+DESIGN_GUIDE.md
+FIGMA_IMPLEMENTATION_PLAN.md
+MVP_PLAN.md
+
+# deployment-unneeded docs / local notes
+docs/
+public/Discover Artists.png
+public/fivcon2.png
+public/logoMain.png
+public/loadings/*.png
 
 # typescript
 *.tsbuildinfo
