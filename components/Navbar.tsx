@@ -3,27 +3,95 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import type { User } from '@supabase/supabase-js'
 import { ArrowRight, LayoutDashboard, LogOut, Menu, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import BrandLogo from '@/components/BrandLogo'
 
+type NavAccess = 'loading' | 'guest' | 'authenticated' | 'artist' | 'admin'
+
 export default function Navbar() {
   const pathname = usePathname()
   const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
+  const [navAccess, setNavAccess] = useState<NavAccess>('loading')
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null))
+    let alive = true
+
+    async function loadNavigationAccess() {
+      const { data } = await supabase.auth.getSession()
+      const sessionUser = data.session?.user ?? null
+
+      if (!alive) return
+
+      if (!sessionUser) {
+        setNavAccess('guest')
+        return
+      }
+
+      const [userRoleResult, artistProfileResult] = await Promise.all([
+        supabase.from('users').select('role').eq('id', sessionUser.id).maybeSingle(),
+        supabase.from('artist_profiles').select('id').eq('user_id', sessionUser.id).maybeSingle(),
+      ])
+
+      if (!alive) return
+
+      const userRole = userRoleResult.data?.role ?? null
+      const hasArtistProfile = Boolean(artistProfileResult.data?.id)
+
+      if (userRole === 'admin') {
+        setNavAccess('admin')
+        return
+      }
+
+      if (userRole === 'artist' || hasArtistProfile) {
+        setNavAccess('artist')
+        return
+      }
+
+      setNavAccess('authenticated')
+    }
+
+    void loadNavigationAccess()
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
+      const nextUser = session?.user ?? null
+
+      if (!nextUser) {
+        setNavAccess('guest')
+        return
+      }
+
+      void (async () => {
+        const [userRoleResult, artistProfileResult] = await Promise.all([
+          supabase.from('users').select('role').eq('id', nextUser.id).maybeSingle(),
+          supabase.from('artist_profiles').select('id').eq('user_id', nextUser.id).maybeSingle(),
+        ])
+
+        const userRole = userRoleResult.data?.role ?? null
+        const hasArtistProfile = Boolean(artistProfileResult.data?.id)
+
+        if (userRole === 'admin') {
+          setNavAccess('admin')
+          return
+        }
+
+        if (userRole === 'artist' || hasArtistProfile) {
+          setNavAccess('artist')
+          return
+        }
+
+        setNavAccess('authenticated')
+      })()
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      alive = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   const isAdmin = pathname.startsWith('/admin')
@@ -48,6 +116,10 @@ export default function Navbar() {
     { href: '/for-artist', label: 'For Artists' },
   ]
 
+  const showDashboard = navAccess === 'artist'
+  const showAdminLink = navAccess === 'admin'
+  const showLoggedInControls = navAccess === 'authenticated' || navAccess === 'artist' || navAccess === 'admin'
+
   return (
     <header className="sticky top-0 z-50 border-b border-[rgba(0,23,57,0.08)] bg-white">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-4 px-4 sm:h-20 sm:px-6 lg:px-8">
@@ -70,15 +142,26 @@ export default function Navbar() {
             ))}
           </nav>
 
-          {user ? (
+          {showLoggedInControls ? (
             <>
-              <Link
-                href="/artist-dashboard"
-                className="inline-flex items-center gap-2 rounded-full border border-[color:var(--border)]/10 bg-white px-4 py-2.5 text-sm font-medium text-[var(--foreground)] shadow-[0_10px_24px_rgba(0,23,57,0.05)] transition-all hover:-translate-y-0.5 hover:border-[color:var(--border)]/20 hover:bg-[var(--surface-2)]"
-              >
-                <LayoutDashboard className="h-4 w-4" />
-                Dashboard
-              </Link>
+              {showDashboard && (
+                <Link
+                  href="/artist-dashboard"
+                  className="inline-flex items-center gap-2 rounded-full border border-[color:var(--border)]/10 bg-white px-4 py-2.5 text-sm font-medium text-[var(--foreground)] shadow-[0_10px_24px_rgba(0,23,57,0.05)] transition-all hover:-translate-y-0.5 hover:border-[color:var(--border)]/20 hover:bg-[var(--surface-2)]"
+                >
+                  <LayoutDashboard className="h-4 w-4" />
+                  Dashboard
+                </Link>
+              )}
+              {showAdminLink && (
+                <Link
+                  href="/admin"
+                  className="inline-flex items-center gap-2 rounded-full border border-[color:var(--border)]/10 bg-white px-4 py-2.5 text-sm font-medium text-[var(--foreground)] shadow-[0_10px_24px_rgba(0,23,57,0.05)] transition-all hover:-translate-y-0.5 hover:border-[color:var(--border)]/20 hover:bg-[var(--surface-2)]"
+                >
+                  <LayoutDashboard className="h-4 w-4" />
+                  Admin
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={handleLogout}
@@ -87,6 +170,15 @@ export default function Navbar() {
                 <LogOut className="h-4 w-4" />
                 Log out
               </button>
+              {navAccess === 'authenticated' && (
+                <Link
+                  href="/artist-signup"
+                  className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(0,23,57,0.16)] transition-all hover:-translate-y-0.5 hover:bg-[#0a2148]"
+                >
+                  Join as Artist
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              )}
             </>
           ) : (
             <>
@@ -129,29 +221,40 @@ export default function Navbar() {
 
           <div className="fixed inset-x-0 top-20 z-50 border-b border-[rgba(0,23,57,0.08)] bg-white px-4 py-4 shadow-[0_18px_40px_rgba(0,23,57,0.08)] md:hidden">
             <div className="mx-auto flex max-w-7xl flex-col gap-2">
-              {rightLinks.map(item => (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className={[
+                {rightLinks.map(item => (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    className={[
                     'rounded-xl px-3 py-3 text-sm font-medium transition-colors',
                     item.emphasized ? 'text-[var(--foreground)]' : 'text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--foreground)]',
                   ].join(' ')}
                   onClick={() => setOpen(false)}
-                >
-                  {item.label}
-                </Link>
-              ))}
-
-              {user ? (
-                <>
-                  <Link
-                    href="/artist-dashboard"
-                    className="rounded-xl px-3 py-3 text-sm font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--surface-2)]"
-                    onClick={() => setOpen(false)}
                   >
-                    Dashboard
+                    {item.label}
                   </Link>
+                ))}
+
+              {showLoggedInControls ? (
+                <>
+                  {showDashboard && (
+                    <Link
+                      href="/artist-dashboard"
+                      className="rounded-xl px-3 py-3 text-sm font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--surface-2)]"
+                      onClick={() => setOpen(false)}
+                    >
+                      Dashboard
+                    </Link>
+                  )}
+                  {showAdminLink && (
+                    <Link
+                      href="/admin"
+                      className="rounded-xl px-3 py-3 text-sm font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--surface-2)]"
+                      onClick={() => setOpen(false)}
+                    >
+                      Admin
+                    </Link>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -162,6 +265,16 @@ export default function Navbar() {
                   >
                     Log out
                   </button>
+                  {navAccess === 'authenticated' && (
+                    <Link
+                      href="/artist-signup"
+                      className="mt-1 inline-flex items-center justify-center gap-2 rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(0,23,57,0.16)] transition-all hover:bg-[#0a2148]"
+                      onClick={() => setOpen(false)}
+                    >
+                      Join as Artist
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  )}
                 </>
               ) : (
                 <>
