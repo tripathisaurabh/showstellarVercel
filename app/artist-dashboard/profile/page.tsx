@@ -73,6 +73,11 @@ export default function ProfileEditorPage() {
     return 'bin'
   }
 
+  function addCacheBuster(url: string) {
+    const separator = url.includes('?') ? '&' : '?'
+    return `${url}${separator}v=${Date.now()}`
+  }
+
   useEffect(() => {
     async function load() {
       const supabase = getSupabase()
@@ -179,9 +184,10 @@ export default function ProfileEditorPage() {
       if (uploadError) throw uploadError
 
       const { data: { publicUrl } } = supabase.storage.from('artist-media').getPublicUrl(path)
-      set('profile_image', publicUrl)
+      const cacheBustedProfileUrl = addCacheBuster(publicUrl)
+      set('profile_image', cacheBustedProfileUrl)
 
-      const { error: updateError } = await supabase.from('artist_profiles').update({ profile_image: publicUrl }).eq('id', profileId)
+      const { error: updateError } = await supabase.from('artist_profiles').update({ profile_image: cacheBustedProfileUrl }).eq('id', profileId)
       if (updateError) throw updateError
 
       router.refresh()
