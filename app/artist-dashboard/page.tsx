@@ -7,6 +7,8 @@ import type { LucideIcon } from 'lucide-react'
 import { getArtistDisplayName, getArtistPublicPath, getArtistCategories } from '@/lib/artist-profile'
 import type { PublicArtistRecord } from '@/lib/artist-profile'
 
+export const dynamic = 'force-dynamic'
+
 type InquiryRow = {
   id: string
   client_name: string

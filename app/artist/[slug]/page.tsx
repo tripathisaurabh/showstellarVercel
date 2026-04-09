@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { headers } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { hasPublicSupabaseConfig } from '@/lib/supabase/config'
 import BookingModal from '@/components/DeferredBookingModal'
 import Footer from '@/components/Footer'
 import { ChevronRight, MapPin, Star } from 'lucide-react'
@@ -54,6 +55,13 @@ async function loadArtistBySlug(supabase: Awaited<ReturnType<typeof createClient
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params
+  if (!hasPublicSupabaseConfig()) {
+    return {
+      title: 'Artist not found',
+      robots: { index: false, follow: false },
+    }
+  }
+
   const supabase = await createClient()
   const artist = await loadArtistBySlug(supabase, slug)
 
@@ -90,6 +98,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function ArtistProfilePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
+  if (!hasPublicSupabaseConfig()) {
+    notFound()
+  }
+
   const supabase = await createClient()
   const artist = await loadArtistBySlug(supabase, slug)
 

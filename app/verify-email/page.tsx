@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import ResendButton from './ResendButton'
 import ShowStellarMascotState from '@/components/ShowStellarMascotState'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata = { robots: { index: false, follow: false } }
 
 export default async function VerifyEmailPage({

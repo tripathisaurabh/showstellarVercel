@@ -3,6 +3,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/server'
+import { hasPublicSupabaseConfig } from '@/lib/supabase/config'
 import {
   ArrowRight,
   CheckCircle2,
@@ -112,14 +113,18 @@ export const metadata: Metadata = {
 }
 
 export default async function HomePage() {
-  const supabase = await createClient()
-  const { data: featured } = await supabase
-    .from('artist_profiles')
-    .select('*, users(full_name), primary_category:categories(name), categories, custom_categories')
-    .eq('approval_status', 'approved')
-    .eq('is_featured', true)
-    .limit(12)
-  const rawArtists = (featured ?? []) as PublicArtistRecord[]
+  const rawArtists: PublicArtistRecord[] = []
+
+  if (hasPublicSupabaseConfig()) {
+    const supabase = await createClient()
+    const { data: featured } = await supabase
+      .from('artist_profiles')
+      .select('*, users(full_name), primary_category:categories(name), categories, custom_categories')
+      .eq('approval_status', 'approved')
+      .eq('is_featured', true)
+      .limit(12)
+    rawArtists.push(...((featured ?? []) as PublicArtistRecord[]))
+  }
   // Sort server-side: rating desc, then experience desc (nulls last)
   const featuredArtists = [...rawArtists].sort((a, b) => {
     const aR = a.rating != null ? Number(a.rating) : -1

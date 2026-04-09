@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { hasPublicSupabaseConfig } from '@/lib/supabase/config'
 import { ChevronDown, Search, Star } from 'lucide-react'
 import Footer from '@/components/Footer'
 import {
@@ -74,18 +75,26 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
 
 export default async function BrowseArtistsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams
-  const supabase = await createClient()
+  let artists: PublicArtistRecord[] = []
+  let categories: Array<{ name: string }> = []
 
-  let query = supabase
-    .from('artist_profiles')
-    .select('*, users(full_name), primary_category:categories(name), categories, custom_categories, rating, experience_years, is_featured, approval_status')
-    .eq('approval_status', 'approved')
-    .order('created_at', { ascending: false })
+  if (hasPublicSupabaseConfig()) {
+    const supabase = await createClient()
 
-  if (params.city) query = query.ilike('city', `%${params.city}%`)
+    let query = supabase
+      .from('artist_profiles')
+      .select('*, users(full_name), primary_category:categories(name), categories, custom_categories, rating, experience_years, is_featured, approval_status')
+      .eq('approval_status', 'approved')
+      .order('created_at', { ascending: false })
 
-  const { data: artists } = await query
-  const { data: categories } = await supabase.from('categories').select('name').order('name')
+    if (params.city) query = query.ilike('city', `%${params.city}%`)
+
+    const artistsResult = await query
+    const categoriesResult = await supabase.from('categories').select('name').order('name')
+    artists = (artistsResult.data ?? []) as PublicArtistRecord[]
+    categories = (categoriesResult.data ?? []) as Array<{ name: string }>
+  }
+
   const artistRows = (artists ?? []) as PublicArtistRecord[]
   const categoryRows = (categories ?? []) as Array<{ name: string }>
   const categoryOptions = Array.from(

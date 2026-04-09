@@ -23,6 +23,8 @@ import {
   type AdminInquiryCard,
 } from '@/lib/admin-dashboard'
 
+export const dynamic = 'force-dynamic'
+
 type AdminSearchParams = {
   tab?: string
   q?: string

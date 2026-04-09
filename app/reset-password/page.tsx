@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server'
 import { AUTH_FLOW_COOKIE, AUTH_FLOW_RECOVERY } from '@/lib/auth-flow'
 import ResetPasswordClient from './ResetPasswordClient'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata = { robots: { index: false, follow: false } }
 
 type ResetPasswordPageProps = {

@@ -8,6 +8,8 @@ import BrandLogo from '@/components/BrandLogo'
 import { getAdminSession } from '@/lib/admin-access'
 import { loadAdminArtistDetail } from '@/lib/admin-dashboard'
 
+export const dynamic = 'force-dynamic'
+
 const STATUS_STYLES: Record<string, { label: string; bg: string; color: string }> = {
   draft: { label: 'Draft', bg: 'var(--surface-2)', color: 'var(--muted)' },
   pending: { label: 'Pending', bg: 'var(--surface-2)', color: 'var(--accent-violet)' },

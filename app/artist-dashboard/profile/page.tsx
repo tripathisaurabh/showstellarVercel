@@ -18,6 +18,8 @@ import {
 } from '@/lib/artist-profile'
 import { ARTIST_CATEGORY_OPTIONS } from '@/lib/artist-categories'
 
+export const dynamic = 'force-dynamic'
+
 export default function ProfileEditorPage() {
   const router = useRouter()
   const mediaFileRef = useRef<HTMLInputElement>(null)
