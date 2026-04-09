@@ -47,6 +47,7 @@ export default function BookingModal({
     phone: '',
     email: '',
     city: '',
+    address: '',
     event_date: '',
     event_type: '',
     custom_event_type: '',
@@ -61,6 +62,11 @@ export default function BookingModal({
   const isOtherEventType = form.event_type === 'Other'
   const formattedArtistPrice = useMemo(() => artistPrice?.trim() || '', [artistPrice])
   const hasListedArtistPrice = formattedArtistPrice.length > 0
+
+  function buildDetailsWithAddress(address: string, details: string) {
+    const lines = [address.trim() ? `Venue address: ${address.trim()}` : '', details.trim()].filter(Boolean)
+    return lines.length > 0 ? lines.join('\n\n') : null
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -82,7 +88,7 @@ export default function BookingModal({
           venue_type: form.venue_type,
           artist_price: artistPrice ?? null,
           client_offer: form.client_offer.trim() || null,
-          additional_details: form.additional_details.trim() || null,
+          additional_details: buildDetailsWithAddress(form.address, form.additional_details),
         },
         artist: {
           name: artistName,
@@ -111,7 +117,7 @@ export default function BookingModal({
           city: form.city.trim() || null,
           artistPrice: artistPrice ?? null,
           clientOffer: form.client_offer.trim() || null,
-          additionalDetails: form.additional_details.trim() || null,
+          additionalDetails: buildDetailsWithAddress(form.address, form.additional_details),
         },
       }
 
@@ -175,190 +181,210 @@ export default function BookingModal({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 lg:items-start lg:px-8 lg:py-8 lg:pt-28"
           style={{ background: 'rgba(0,23,57,0.5)', backdropFilter: 'blur(4px)' }}
           onClick={e => { if (e.target === e.currentTarget) setOpen(false) }}
         >
           <div
-            className="bg-white w-full max-w-2xl rounded-2xl max-h-[90vh] overflow-y-auto shadow-2xl"
+            className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl lg:max-w-[960px]"
+            style={{ maxHeight: 'calc(100vh - 2rem)' }}
           >
             {/* Modal Header */}
-            <div className="sticky top-0 bg-white border-b px-6 py-5 flex justify-between items-center" style={{ borderColor: 'var(--border)' }}>
-              <div>
-                <h2 className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>Request Booking</h2>
-                <p className="text-sm" style={{ color: 'var(--muted)' }}>Send inquiry to {artistName}</p>
+            <div className="flex items-start justify-between gap-4 border-b bg-white px-6 py-5 sm:px-8 sm:py-6" style={{ borderColor: 'var(--border)' }}>
+              <div className="min-w-0">
+                <h2 className="text-2xl font-bold leading-tight" style={{ color: 'var(--foreground)' }}>Request Booking</h2>
+                <p className="mt-1 text-sm" style={{ color: 'var(--muted)' }}>Send inquiry to {artistName}</p>
               </div>
               <button
                 onClick={() => setOpen(false)}
-                className="w-10 h-10 rounded-xl flex items-center justify-center transition-colors"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors"
                 style={{ background: 'var(--surface-2)', color: 'var(--muted)' }}
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {error && (
-                <ShowStellarFeedbackBanner
-                  state="error"
-                  density="compact"
-                  title="A problem occurred"
-                  message={error}
-                />
-              )}
+            <div className="max-h-[calc(100vh-10rem)] overflow-y-auto lg:max-h-[calc(100vh-14rem)]">
+              <form onSubmit={handleSubmit} className="p-6 space-y-5 sm:p-8">
+                {error && (
+                  <ShowStellarFeedbackBanner
+                    state="error"
+                    density="compact"
+                    title="A problem occurred"
+                    message={error}
+                  />
+                )}
 
-              <div className="grid md:grid-cols-2 gap-4">
-                <Field label="Your Name">
-                  <Input value={form.name} onChange={v => set('name', v)} placeholder="Full name" required />
-                </Field>
-                <Field label="Phone">
-                  <Input value={form.phone} onChange={v => set('phone', v)} placeholder="+91 9876543210" required />
-                </Field>
-              </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Your Name">
+                    <Input value={form.name} onChange={v => set('name', v)} placeholder="Full name" required />
+                  </Field>
+                  <Field label="Phone">
+                    <Input value={form.phone} onChange={v => set('phone', v)} placeholder="+91 9876543210" required />
+                  </Field>
+                </div>
 
-              <Field label="Email">
-                <Input type="email" value={form.email} onChange={v => set('email', v)} placeholder="you@example.com" />
-              </Field>
-
-              <div className="grid md:grid-cols-2 gap-4">
-                <Field label="Event Type">
-                  <select
-                    value={form.event_type}
-                    onChange={e => set('event_type', e.target.value)}
-                    required
-                    className="w-full px-4 py-3 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[var(--accent-violet)] bg-white"
-                    style={{ border: '1px solid var(--border)', color: form.event_type ? 'var(--foreground)' : 'var(--muted)' }}
-                  >
-                    <option value="" disabled>Select type</option>
-                    {eventTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
+                <Field label="Email">
+                  <Input type="email" value={form.email} onChange={v => set('email', v)} placeholder="you@example.com" />
                 </Field>
-                <Field label="Event Date">
-                  <Input type="date" value={form.event_date} onChange={v => set('event_date', v)} required />
-                </Field>
-              </div>
 
-              {isOtherEventType && (
-                <Field label="Custom Event Type">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Event Type">
+                    <select
+                      value={form.event_type}
+                      onChange={e => set('event_type', e.target.value)}
+                      required
+                      className="w-full rounded-xl bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[var(--accent-violet)]"
+                      style={{ border: '1px solid var(--border)', color: form.event_type ? 'var(--foreground)' : 'var(--muted)' }}
+                    >
+                      <option value="" disabled>Select type</option>
+                      {eventTypes.map(t => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Event Date">
+                    <Input type="date" value={form.event_date} onChange={v => set('event_date', v)} required />
+                  </Field>
+                </div>
+
+                {isOtherEventType && (
+                  <Field label="Custom Event Type">
+                    <Input
+                      value={form.custom_event_type}
+                      onChange={v => set('custom_event_type', v)}
+                      placeholder="Describe your event type"
+                      required
+                    />
+                  </Field>
+                )}
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <Field label="Event Size">
+                    <select
+                      value={form.event_size}
+                      onChange={e => set('event_size', e.target.value)}
+                      required
+                      className="w-full rounded-xl bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[var(--accent-violet)]"
+                      style={{ border: '1px solid var(--border)', color: form.event_size ? 'var(--foreground)' : 'var(--muted)' }}
+                    >
+                      <option value="" disabled>Select size</option>
+                      {eventSizes.map(option => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Event Duration">
+                    <select
+                      value={form.event_duration}
+                      onChange={e => set('event_duration', e.target.value)}
+                      required
+                      className="w-full rounded-xl bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[var(--accent-violet)]"
+                      style={{ border: '1px solid var(--border)', color: form.event_duration ? 'var(--foreground)' : 'var(--muted)' }}
+                    >
+                      <option value="" disabled>Select duration</option>
+                      {eventDurations.map(option => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Venue Type">
+                    <select
+                      value={form.venue_type}
+                      onChange={e => set('venue_type', e.target.value)}
+                      required
+                      className="w-full rounded-xl bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[var(--accent-violet)]"
+                      style={{ border: '1px solid var(--border)', color: form.venue_type ? 'var(--foreground)' : 'var(--muted)' }}
+                    >
+                      <option value="" disabled>Select venue</option>
+                      {venueTypes.map(option => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Locality / Area">
+                    <Input
+                      value={form.city}
+                      onChange={v => set('city', v)}
+                      placeholder="e.g. Kurla West"
+                      required
+                    />
+                  </Field>
+                  <Field label="Your Offer (Optional)">
+                    <Input value={form.client_offer} onChange={v => set('client_offer', v)} placeholder="e.g. ₹20,000" inputMode="decimal" />
+                  </Field>
+                </div>
+
+                <Field label="Venue Address (Optional)">
                   <Input
-                    value={form.custom_event_type}
-                    onChange={v => set('custom_event_type', v)}
-                    placeholder="Describe your event type"
-                    required
+                    value={form.address}
+                    onChange={v => set('address', v)}
+                    placeholder="Street, landmark, or full venue address"
                   />
                 </Field>
-              )}
 
-              <div className="grid md:grid-cols-3 gap-4">
-                <Field label="Event Size">
-                  <select
-                    value={form.event_size}
-                    onChange={e => set('event_size', e.target.value)}
-                    required
-                    className="w-full px-4 py-3 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[var(--accent-violet)] bg-white"
-                    style={{ border: '1px solid var(--border)', color: form.event_size ? 'var(--foreground)' : 'var(--muted)' }}
-                  >
-                    <option value="" disabled>Select size</option>
-                    {eventSizes.map(option => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Event Duration">
-                  <select
-                    value={form.event_duration}
-                    onChange={e => set('event_duration', e.target.value)}
-                    required
-                    className="w-full px-4 py-3 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[var(--accent-violet)] bg-white"
-                    style={{ border: '1px solid var(--border)', color: form.event_duration ? 'var(--foreground)' : 'var(--muted)' }}
-                  >
-                    <option value="" disabled>Select duration</option>
-                    {eventDurations.map(option => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Venue Type">
-                  <select
-                    value={form.venue_type}
-                    onChange={e => set('venue_type', e.target.value)}
-                    required
-                    className="w-full px-4 py-3 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[var(--accent-violet)] bg-white"
-                    style={{ border: '1px solid var(--border)', color: form.venue_type ? 'var(--foreground)' : 'var(--muted)' }}
-                  >
-                    <option value="" disabled>Select venue</option>
-                    {venueTypes.map(option => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-4">
-                <Field label="City">
-                  <Input value={form.city} onChange={v => set('city', v)} placeholder="Event city" required />
-                </Field>
-                <Field label="Your Offer (Optional)">
-                  <Input value={form.client_offer} onChange={v => set('client_offer', v)} placeholder="e.g. ₹20,000" inputMode="decimal" />
-                </Field>
-              </div>
-
-              <div className="rounded-2xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
-                <p className="text-xs uppercase tracking-[0.18em] mb-1" style={{ color: 'var(--muted)' }}>
-                  Artist Price
-                </p>
-                {hasListedArtistPrice ? (
-                  <p className="text-lg font-semibold" style={{ color: 'var(--foreground)' }}>
-                    {formattedArtistPrice}
+                <div className="rounded-2xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}>
+                  <p className="mb-1 text-xs uppercase tracking-[0.18em]" style={{ color: 'var(--muted)' }}>
+                    Artist Price
                   </p>
-                ) : (
-                  <>
-                    <p className="text-base font-semibold" style={{ color: 'var(--foreground)' }}>
-                      Price not listed for this artist yet
+                  {hasListedArtistPrice ? (
+                    <p className="text-lg font-semibold" style={{ color: 'var(--foreground)' }}>
+                      {formattedArtistPrice}
                     </p>
-                    <p className="mt-1 text-sm leading-6" style={{ color: 'var(--muted)' }}>
-                      You can still send your inquiry. The artist can share pricing after reviewing your request.
-                    </p>
-                  </>
-                )}
-              </div>
+                  ) : (
+                    <>
+                      <p className="text-base font-semibold" style={{ color: 'var(--foreground)' }}>
+                        Price not listed for this artist yet
+                      </p>
+                      <p className="mt-1 text-sm leading-6" style={{ color: 'var(--muted)' }}>
+                        You can still send your inquiry. The artist can share pricing after reviewing your request.
+                      </p>
+                    </>
+                  )}
+                </div>
 
-              <Field label="Additional Details (Optional)">
-                <textarea
-                  value={form.additional_details}
-                  onChange={e => set('additional_details', e.target.value)}
-                  placeholder="Tell the artist about your event requirements..."
-                  rows={4}
-                  className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none focus:ring-2 focus:ring-[var(--accent-violet)] bg-white"
-                  style={{ border: '1px solid var(--border)', color: 'var(--foreground)' }}
-                />
-              </Field>
+                <Field label="Additional Details (Optional)">
+                  <textarea
+                    value={form.additional_details}
+                    onChange={e => set('additional_details', e.target.value)}
+                    placeholder="Tell the artist about your event requirements..."
+                    rows={4}
+                    className="w-full resize-none rounded-xl bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[var(--accent-violet)]"
+                    style={{ border: '1px solid var(--border)', color: 'var(--foreground)' }}
+                  />
+                </Field>
 
-              <div className="flex gap-4 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="flex-1 py-3 rounded-xl font-medium border transition-colors hover:opacity-80"
-                  style={{ border: '1px solid var(--border)', color: 'var(--foreground)' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex-1 py-3 rounded-xl font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-                  style={{ background: 'var(--navy)' }}
-                >
-                  {loading ? 'Sending…' : 'Send Inquiry'}
-                </button>
-              </div>
-            </form>
+                <div className="grid gap-3 pt-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="w-full rounded-xl border py-3 font-medium transition-colors hover:opacity-80"
+                    style={{ border: '1px solid var(--border)', color: 'var(--foreground)' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full rounded-xl py-3 font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                    style={{ background: 'var(--navy)' }}
+                  >
+                    {loading ? 'Sending…' : 'Send Inquiry'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
