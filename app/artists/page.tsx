@@ -131,7 +131,7 @@ export default async function BrowseArtistsPage({ searchParams }: { searchParams
       </section> */}
 
       {/* Filters */}
-      <section className="sticky top-20 z-40 border-b bg-white py-3 sm:py-5" style={{ borderColor: 'var(--border)' }}>
+      <section className="border-b bg-white py-3 sm:py-5 md:sticky md:top-20 md:z-40" style={{ borderColor: 'var(--border)' }}>
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <ArtistFilters
             categoryOptions={categoryOptions}
