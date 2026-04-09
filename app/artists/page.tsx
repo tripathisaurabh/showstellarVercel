@@ -3,8 +3,9 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { hasPublicSupabaseConfig } from '@/lib/supabase/config'
-import { ChevronDown, Search, Star } from 'lucide-react'
+import { Search, Star } from 'lucide-react'
 import Footer from '@/components/Footer'
+import ArtistFilters from '@/components/ArtistFilters'
 import {
   getArtistDisplayName,
   getArtistLocation,
@@ -132,65 +133,12 @@ export default async function BrowseArtistsPage({ searchParams }: { searchParams
       {/* Filters */}
       <section className="sticky top-20 z-40 border-b bg-white py-3 sm:py-5" style={{ borderColor: 'var(--border)' }}>
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="rounded-[1.5rem] border border-[rgba(0,23,57,0.08)] bg-white px-3 py-3 shadow-[0_14px_34px_rgba(0,23,57,0.05)] sm:px-4">
-            <form className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,2.1fr)_minmax(220px,1fr)_minmax(180px,0.85fr)_auto_auto] xl:items-center">
-            {/* Main search input */}
-            <div className="relative min-w-0 md:col-span-2 xl:col-span-1">
-              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--muted)' }} />
-              <input
-                name="q"
-                defaultValue={params.q}
-                placeholder="Search by name, category, city..."
-                className="h-12 w-full rounded-2xl border bg-white py-3 pl-11 pr-4 text-sm outline-none transition-shadow focus:border-transparent focus:ring-2 focus:ring-[var(--accent-violet)]"
-                style={{ border: '1px solid var(--border)', color: 'var(--foreground)' }}
-              />
-            </div>
-
-            {/* Category dropdown */}
-            <div className="relative min-w-0">
-              <select
-                name="category"
-                defaultValue={activeCategory}
-                className="h-12 w-full appearance-none rounded-2xl border bg-white px-4 pr-11 text-sm outline-none transition-shadow focus:border-transparent focus:ring-2 focus:ring-[var(--accent-violet)]"
-                style={{ border: '1px solid var(--border)', color: 'var(--foreground)' }}
-              >
-                <option value="">All Categories</option>
-                {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--muted)' }} />
-            </div>
-
-            {/* City input */}
-            <div className="min-w-0">
-              <input
-                name="city"
-                defaultValue={params.city}
-                placeholder="City"
-                className="h-12 w-full rounded-2xl border bg-white px-4 text-sm outline-none transition-shadow focus:border-transparent focus:ring-2 focus:ring-[var(--accent-violet)]"
-                style={{ border: '1px solid var(--border)', color: 'var(--foreground)' }}
-              />
-            </div>
-
-            {/* Search button */}
-            <button
-              type="submit"
-              className="h-12 w-full rounded-2xl px-6 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:opacity-95 xl:w-auto"
-              style={{ background: 'var(--navy)' }}
-            >
-              Search
-            </button>
-
-            {(params.q || params.category || params.city) && (
-              <Link
-                href="/artists"
-                className="hidden h-12 shrink-0 items-center justify-center rounded-2xl border px-4 text-sm font-medium transition-colors hover:opacity-80 xl:inline-flex"
-                style={{ border: '1px solid var(--border)', color: 'var(--muted)' }}
-              >
-                Clear
-              </Link>
-            )}
-            </form>
-          </div>
+          <ArtistFilters
+            categoryOptions={categoryOptions}
+            initialCategory={activeCategory}
+            initialCity={params.city ?? ''}
+            initialQuery={params.q ?? ''}
+          />
         </div>
       </section>
 
