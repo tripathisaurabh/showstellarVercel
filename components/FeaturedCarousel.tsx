@@ -190,7 +190,7 @@ export default function FeaturedCarousel({ artists }: { artists: FeaturedArtistS
 
                 {artist.bio && (
                   <p className="mt-4 line-clamp-2 text-sm leading-6 text-[var(--muted)] sm:line-clamp-3">
-                    {artist.bio}
+                    <span className="font-semibold text-[var(--foreground)]">About:</span> {artist.bio}
                   </p>
                 )}
 
