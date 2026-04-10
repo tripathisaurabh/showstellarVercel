@@ -569,6 +569,9 @@ export default function ProfileEditorPage() {
             <Upload className="w-6 h-6" />
             {uploadingMedia ? 'Uploading…' : 'Upload Photos / Videos'}
           </button>
+          <p className="mt-3 text-xs leading-6" style={{ color: 'var(--muted)' }}>
+            Gallery uploads support JPG, PNG, WebP, GIF, MP4, WebM, and MOV files up to {MAX_MEDIA_SIZE_MB}MB.
+          </p>
         </div>
       </div>
     </ArtistDashboardShell>
