@@ -44,15 +44,17 @@ export async function GET(request: Request) {
   const norm = (s: string | null | undefined) => (s ?? '').toLowerCase().trim()
   const cityNorm = norm(city)
 
-  const scored = artists.map(a => {
-    const artistCity = norm(a.city)
-    const cityMatch =
-      cityNorm.length > 0 &&
-      (artistCity.includes(cityNorm) || cityNorm.includes(artistCity))
-    const rating = a.rating != null ? Number(a.rating) : -1
-    const exp = a.experience_years != null ? Number(a.experience_years) : -1
-    return { artist: a, cityMatch, rating, exp }
-  })
+  const scored = artists
+    .map(a => {
+      const locationText = norm([a.locality, a.city, a.state].filter(Boolean).join(' '))
+      const cityMatch =
+        cityNorm.length > 0 &&
+        (locationText.includes(cityNorm) || cityNorm.includes(locationText))
+      const rating = a.rating != null ? Number(a.rating) : -1
+      const exp = a.experience_years != null ? Number(a.experience_years) : -1
+      return { artist: a, cityMatch, rating, exp }
+    })
+    .filter(item => (cityNorm.length > 0 ? item.cityMatch : true))
 
   scored.sort((a, b) => {
     if (a.cityMatch !== b.cityMatch) return a.cityMatch ? -1 : 1

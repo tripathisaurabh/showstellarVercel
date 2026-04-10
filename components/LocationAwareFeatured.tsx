@@ -11,7 +11,7 @@ async function fetchCityArtists(cityName: string): Promise<FeaturedArtistSlot[] 
     const res = await fetch(`/api/featured-artists?city=${encodeURIComponent(cityName)}`)
     if (!res.ok) return null
     const data = await res.json() as { artists?: FeaturedArtistSlot[] }
-    return data.artists && data.artists.length > 0 ? data.artists : null
+    return data.artists ?? []
   } catch {
     return null
   }
