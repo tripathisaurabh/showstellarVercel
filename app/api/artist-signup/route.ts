@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import {
   ARTIST_CATEGORY_OPTIONS,
+  ensureArtistCategorySeeded,
   partitionArtistCategories,
   splitCategoryInput,
 } from '@/lib/artist-categories'
@@ -57,8 +58,24 @@ export async function POST(request: Request) {
     ...splitCategoryInput(body.category),
   ]
 
-  if (!fullName || !phoneNumber || !email || !password || !city) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  if (!fullName) {
+    return NextResponse.json({ error: 'Enter your full name' }, { status: 400 })
+  }
+
+  if (!phoneNumber) {
+    return NextResponse.json({ error: 'Enter your phone number' }, { status: 400 })
+  }
+
+  if (!email) {
+    return NextResponse.json({ error: 'Enter your email address' }, { status: 400 })
+  }
+
+  if (!password) {
+    return NextResponse.json({ error: 'Enter a password' }, { status: 400 })
+  }
+
+  if (!city) {
+    return NextResponse.json({ error: 'Enter your city' }, { status: 400 })
   }
 
   if (password.length < 8) {
@@ -66,6 +83,12 @@ export async function POST(request: Request) {
   }
 
   const supabase = getAdminSupabaseClient()
+  const seedResult = await ensureArtistCategorySeeded(supabase)
+  if (!seedResult.ok) {
+    console.error('[artist-signup] category seed failed:', seedResult.error)
+    return NextResponse.json({ error: 'Unable to create artist account' }, { status: 400 })
+  }
+
   const { data: categoryRows, error: categoriesError } = await supabase
     .from('categories')
     .select('id, name')

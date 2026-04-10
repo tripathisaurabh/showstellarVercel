@@ -4,6 +4,7 @@ import {
   ARTIST_CATEGORY_OPTIONS,
   MAX_CUSTOM_ARTIST_CATEGORY_LENGTH,
   MAX_TOTAL_ARTIST_CATEGORIES,
+  ensureArtistCategorySeeded,
   normalizeArtistCategorySelection,
   splitCategoryInput,
 } from '@/lib/artist-categories'
@@ -62,6 +63,12 @@ export async function PATCH(request: Request) {
 
   if (!profile) {
     return NextResponse.json({ ok: false, error: 'Artist profile not found' }, { status: 404 })
+  }
+
+  const seedResult = await ensureArtistCategorySeeded(supabase)
+  if (!seedResult.ok) {
+    console.error('[artist-profile] category seed failed:', seedResult.error)
+    return NextResponse.json({ ok: false, error: 'Failed to save profile' }, { status: 500 })
   }
 
   const { data: categoryRows, error: categoryError } = await supabase

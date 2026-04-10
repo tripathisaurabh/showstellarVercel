@@ -53,6 +53,8 @@ export const ARTIST_CATEGORY_OPTIONS = [
   'Other',
 ] as const
 
+export const ARTIST_CATEGORY_SEED_NAMES = Array.from(ARTIST_CATEGORY_OPTIONS)
+
 export const MAX_TOTAL_ARTIST_CATEGORIES = 10
 export const MAX_CUSTOM_ARTIST_CATEGORY_LENGTH = 50
 
@@ -274,4 +276,35 @@ export function artistMatchesCategory(
 
   const combined = combineArtistCategories(artistCategories).combined
   return combined.some(category => normalizeCategoryKey(category) === filter)
+}
+
+type CategorySeedClient = {
+  from: (table: string) => {
+    select: (columns: string) => {
+      order: (column: string) => Promise<{ data: Array<{ id: string; name: string | null }> | null; error: unknown }>
+    }
+    insert: (rows: Array<{ name: string }>) => Promise<{ error: unknown | null }>
+  }
+}
+
+export async function ensureArtistCategorySeeded(supabase: unknown) {
+  const client = supabase as CategorySeedClient
+  const { data, error } = await client.from('categories').select('id, name').order('name')
+  if (error) {
+    return { ok: false as const, error }
+  }
+
+  const existing = new Set((data ?? []).map((row: { name: string | null }) => normalizeCategoryKey(row.name)))
+  const missing = ARTIST_CATEGORY_SEED_NAMES.filter(name => !existing.has(normalizeCategoryKey(name)))
+
+  if (missing.length === 0) {
+    return { ok: true as const, seeded: 0 }
+  }
+
+  const insertResult = await client.from('categories').insert(missing.map(name => ({ name })))
+  if (insertResult.error) {
+    return { ok: false as const, error: insertResult.error }
+  }
+
+  return { ok: true as const, seeded: missing.length }
 }

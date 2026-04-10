@@ -3,6 +3,7 @@ import {
   ARTIST_CATEGORY_OPTIONS,
   MAX_CUSTOM_ARTIST_CATEGORY_LENGTH,
   MAX_TOTAL_ARTIST_CATEGORIES,
+  ensureArtistCategorySeeded,
   partitionArtistCategories,
   splitCategoryInput,
 } from '@/lib/artist-categories'
@@ -65,8 +66,16 @@ export async function POST(request: Request) {
     ...splitCategoryInput(body.category),
   ]
 
-  if (!fullName || !phoneNumber || !city) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  if (!fullName) {
+    return NextResponse.json({ error: 'Enter your full name' }, { status: 400 })
+  }
+
+  if (!phoneNumber) {
+    return NextResponse.json({ error: 'Enter your phone number' }, { status: 400 })
+  }
+
+  if (!city) {
+    return NextResponse.json({ error: 'Enter your city' }, { status: 400 })
   }
 
   const supabase = await createClient()
@@ -79,6 +88,12 @@ export async function POST(request: Request) {
   }
 
   const admin = getAdminSupabaseClient()
+  const seedResult = await ensureArtistCategorySeeded(admin)
+  if (!seedResult.ok) {
+    console.error('[google-complete] category seed failed:', seedResult.error)
+    return NextResponse.json({ error: 'Unable to complete profile' }, { status: 500 })
+  }
+
   const { data: categoryRows, error: categoryError } = await admin
     .from('categories')
     .select('id, name')
