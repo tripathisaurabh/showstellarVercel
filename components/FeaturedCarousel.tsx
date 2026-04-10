@@ -129,14 +129,14 @@ export default function FeaturedCarousel({ artists }: { artists: FeaturedArtistS
             style={{ scrollSnapAlign: 'start' }}
           >
             <article className="flex min-h-[500px] flex-col overflow-hidden rounded-[1.75rem] border border-[rgba(0,23,57,0.08)] bg-white shadow-[0_20px_48px_rgba(0,23,57,0.10)] transition-all duration-200 hover:-translate-y-1 hover:border-[rgba(0,23,57,0.14)] hover:shadow-[0_28px_64px_rgba(0,23,57,0.18)] sm:min-h-[520px] lg:min-h-[540px]">
-              <div className="relative aspect-[4/3] overflow-hidden flex-shrink-0">
+              <div className="relative aspect-[4/3] overflow-hidden flex-shrink-0 bg-[linear-gradient(180deg,#f8f9fc_0%,#eef3f9_100%)]">
                 {artist.profileImage ? (
                   <Image
                     src={artist.profileImage}
                     alt={artist.displayName}
                     fill
                     sizes="(max-width: 640px) 86vw, (max-width: 1024px) calc(50vw - 32px), calc(33vw - 32px)"
-                    className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                    className="object-contain transition-transform duration-500 group-hover:scale-[1.01]"
                     loading={i < 3 ? 'eager' : 'lazy'}
                   />
                 ) : (
