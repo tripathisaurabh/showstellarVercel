@@ -23,6 +23,11 @@ const categories = [
     image: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=400&h=300&fit=crop',
   },
   {
+    name: 'Live Musicians',
+    filterCategory: 'Live Musician',
+    image: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=400&h=300&fit=crop',
+  },
+  {
     name: 'DJs',
     filterCategory: 'DJ',
     image: 'https://images.unsplash.com/photo-1544785349-c4a5301826fd?q=80&w=2340&auto=format&fit=crop',
@@ -33,29 +38,24 @@ const categories = [
     image: 'https://images.unsplash.com/photo-1508700929628-666bc8bd84ea?w=400&h=300&fit=crop',
   },
   {
-    name: 'Comedians',
-    filterCategory: 'Comedian',
-    image: 'https://images.unsplash.com/photo-1622445867515-8bbd673c85d7?q=80&w=2340&auto=format&fit=crop',
-  },
-  {
-    name: 'Anchors',
-    filterCategory: 'Emcee / Host',
-    image: 'https://images.unsplash.com/photo-1590650153855-d9e808231d41?w=400&h=300&fit=crop',
-  },
-  {
-    name: 'Bands',
-    filterCategory: 'Band',
-    image: 'https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?q=80&w=2940&auto=format&fit=crop',
-  },
-  {
     name: 'Photographers',
     filterCategory: 'Photographer',
     image: 'https://images.unsplash.com/photo-1623783356340-95375aac85ce?q=80&w=2348&auto=format&fit=crop',
   },
   {
     name: 'Mehendi Artists',
-    filterCategory: 'Other',
+    filterCategory: 'Mehendi Artist',
     image: 'https://images.unsplash.com/photo-1605100598080-ef218d438f24?q=80&w=2340&auto=format&fit=crop',
+  },
+  {
+    name: 'Makeup Artists',
+    filterCategory: 'Makeup Artist',
+    image: 'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=400&h=300&fit=crop',
+  },
+  {
+    name: 'Beauty Parlours',
+    filterCategory: 'Beauty Parlour / Salon',
+    image: 'https://images.unsplash.com/photo-1522337660859-02fbefca4702?w=400&h=300&fit=crop',
   },
 ]
 

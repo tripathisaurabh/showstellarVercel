@@ -1,13 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import {
   dedupeCategories,
   MAX_CUSTOM_ARTIST_CATEGORY_LENGTH,
   MAX_TOTAL_ARTIST_CATEGORIES,
   normalizeCategoryKey,
-  normalizeCategoryValue,
+  normalizeArtistCategoryLabel,
   splitCategoryInput,
 } from '@/lib/artist-categories'
 
@@ -26,18 +26,38 @@ type Props = {
 
 export default function CategorySelector({
   label = 'Categories',
-  description = 'Select one or more categories. Add custom categories if needed.',
+  description = 'Select one or more categories. Use custom categories only for niche roles not listed below.',
   options,
   value,
   onChange,
 }: Props) {
   const [customInput, setCustomInput] = useState('')
+  const [searchInput, setSearchInput] = useState('')
   const [message, setMessage] = useState('')
+  const [mounted, setMounted] = useState(false)
 
   const totalSelected = value.categories.length + value.customCategories.length
   const selectedKeySet = useMemo(() => {
     return new Set([...value.categories, ...value.customCategories].map(normalizeCategoryKey))
   }, [value.categories, value.customCategories])
+
+  const filteredOptions = useMemo(() => {
+    const query = normalizeCategoryKey(searchInput)
+    if (!query) return options
+
+    return options.filter(option => {
+      const normalizedOption = normalizeCategoryKey(normalizeArtistCategoryLabel(option))
+      return (
+        normalizedOption.includes(query) ||
+        normalizeCategoryKey(option).includes(query)
+      )
+    })
+  }, [options, searchInput])
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => setMounted(true), 0)
+    return () => window.clearTimeout(handle)
+  }, [])
 
   function update(nextCategories: string[], nextCustom: string[]) {
     const categories = dedupeCategories(nextCategories)
@@ -47,7 +67,7 @@ export default function CategorySelector({
 
   function toggleCategory(category: string) {
     setMessage('')
-    const normalized = normalizeCategoryValue(category)
+    const normalized = normalizeArtistCategoryLabel(category)
     if (!normalized) return
 
     const nextCategories = [...value.categories]
@@ -88,7 +108,7 @@ export default function CategorySelector({
     const seen = new Set([...nextCategories, ...nextCustom].map(normalizeCategoryKey))
 
     for (const token of tokens) {
-      const normalized = normalizeCategoryValue(token)
+      const normalized = normalizeArtistCategoryLabel(token)
       if (!normalized) continue
       if (normalized.length > MAX_CUSTOM_ARTIST_CATEGORY_LENGTH) {
         setMessage(`Custom categories must be ${MAX_CUSTOM_ARTIST_CATEGORY_LENGTH} characters or fewer.`)
@@ -127,6 +147,10 @@ export default function CategorySelector({
     )
   }
 
+  function clearSearch() {
+    setSearchInput('')
+  }
+
   return (
     <div className="space-y-3 rounded-2xl border bg-white p-4 sm:p-5" style={{ border: '1px solid var(--border)' }}>
       <div className="flex items-start justify-between gap-4">
@@ -139,26 +163,76 @@ export default function CategorySelector({
         </span>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {options.map(option => {
-          const active = selectedKeySet.has(normalizeCategoryKey(option))
-          return (
-            <button
-              key={option}
-              type="button"
-              onClick={() => toggleCategory(option)}
-              className="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition-colors"
-              style={{
-                background: active ? 'var(--navy)' : 'white',
-                color: active ? 'white' : 'var(--foreground)',
-                borderColor: active ? 'var(--navy)' : 'var(--border)',
-              }}
-            >
-              {option}
-            </button>
-          )
-        })}
+      <div className="relative">
+        <input
+          value={searchInput}
+          onChange={e => setSearchInput(e.target.value)}
+          placeholder="Search artist type"
+          className="w-full rounded-xl bg-white px-4 py-3 pl-11 text-sm outline-none focus:ring-2 focus:ring-[var(--accent-violet)]"
+          style={{ border: '1px solid var(--border)', color: 'var(--foreground)' }}
+          aria-label="Search artist categories"
+        />
+        <svg
+          className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2"
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M21 21l-4.3-4.3m1.8-5.2a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        {searchInput ? (
+          <button
+            type="button"
+            onClick={clearSearch}
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full px-2 py-1 text-xs font-medium transition-colors hover:bg-[var(--surface-2)]"
+            style={{ color: 'var(--muted)' }}
+            aria-label="Clear category search"
+          >
+            Clear
+          </button>
+        ) : null}
       </div>
+
+      {mounted && searchInput.trim() ? (
+        <>
+          <div className="flex flex-wrap gap-2">
+            {filteredOptions.map(option => {
+              const active = selectedKeySet.has(normalizeCategoryKey(option))
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => toggleCategory(option)}
+                  className="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition-colors"
+                  style={{
+                    background: active ? 'var(--navy)' : 'white',
+                    color: active ? 'white' : 'var(--foreground)',
+                    borderColor: active ? 'var(--navy)' : 'var(--border)',
+                  }}
+                >
+                  {option}
+                </button>
+              )
+            })}
+          </div>
+
+          {filteredOptions.length === 0 && (
+            <p className="text-xs" style={{ color: 'var(--muted)' }}>
+              No matching artist categories found. Try a broader term like “music”, “beauty”, or “dance”.
+            </p>
+          )}
+        </>
+      ) : (
+        <div className="rounded-xl border border-dashed px-4 py-5 text-sm" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>
+          Search artist types to see matching categories.
+        </div>
+      )}
 
       <div className="rounded-xl border border-dashed p-3 sm:p-4" style={{ borderColor: 'var(--border)' }}>
         <div className="flex flex-col gap-3 sm:flex-row">

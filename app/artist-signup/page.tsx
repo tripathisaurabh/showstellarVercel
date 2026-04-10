@@ -160,7 +160,10 @@ export default function ArtistSignupPage() {
   }
 
   return (
-    <div className="min-h-screen py-6 sm:py-10 lg:py-16" style={{ background: 'var(--background)' }}>
+    <div
+      className="min-h-screen py-6 sm:py-10 lg:py-16 max-sm:bg-[#e9eef5]"
+      style={{ background: 'var(--background)' }}
+    >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)] lg:items-start lg:gap-10 xl:gap-12">
           <section className="space-y-4 lg:sticky lg:top-8">
@@ -195,7 +198,10 @@ export default function ArtistSignupPage() {
               </div>
             </div>
 
-            <div className="rounded-[28px] border bg-white p-5 shadow-sm sm:p-6" style={{ borderColor: 'var(--border)' }}>
+            <div
+              className="rounded-[28px] border bg-white p-5 shadow-sm sm:p-6 max-sm:border-[rgba(0,23,57,0.14)] max-sm:bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fc_100%)] max-sm:shadow-[0_18px_40px_rgba(0,23,57,0.10)]"
+              style={{ borderColor: 'var(--border)' }}
+            >
               <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: 'var(--muted)' }}>
                 {oauthMode ? 'Complete in minutes' : 'Join as Artist'}
               </p>
@@ -222,7 +228,10 @@ export default function ArtistSignupPage() {
             </div>
           </section>
 
-          <div className="w-full rounded-[28px] border bg-white p-5 shadow-sm sm:p-6 lg:p-10" style={{ borderColor: 'var(--border)' }}>
+          <div
+            className="w-full rounded-[28px] border bg-white p-5 shadow-sm sm:p-6 lg:p-10 max-sm:border-[rgba(0,23,57,0.14)] max-sm:bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fc_100%)] max-sm:shadow-[0_18px_45px_rgba(0,23,57,0.10)]"
+            style={{ borderColor: 'var(--border)' }}
+          >
             <div className="mb-6 sm:mb-8">
               <h1 className="mb-2 text-3xl font-bold leading-tight" style={{ color: 'var(--foreground)' }}>
                 {heading}
@@ -427,7 +436,7 @@ function Input({
       required={required}
       minLength={minLength}
       disabled={disabled}
-      className="w-full rounded-xl bg-white px-4 py-3 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-[var(--accent-violet)] disabled:bg-[var(--surface-2)]"
+      className="w-full rounded-xl bg-white px-4 py-3 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-[var(--accent-violet)] disabled:bg-[var(--surface-2)] max-sm:border-[rgba(0,23,57,0.16)] max-sm:bg-[var(--surface-2)]"
       style={{ border: '1px solid var(--border)', color: 'var(--foreground)' }}
     />
   )

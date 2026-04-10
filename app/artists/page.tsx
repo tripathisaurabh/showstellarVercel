@@ -13,7 +13,7 @@ import {
   getArtistCategories,
   type PublicArtistRecord,
 } from '@/lib/artist-profile'
-import { artistMatchesCategory } from '@/lib/artist-categories'
+import { artistMatchesCategory, normalizeArtistCategoryLabel } from '@/lib/artist-categories'
 import { absoluteUrl, seoDefaults } from '@/lib/seo'
 
 interface SearchParams { category?: string; city?: string; q?: string }
@@ -30,16 +30,60 @@ function normalizeCategory(value?: string | null) {
 }
 
 function buildArtistsPageTitle(category?: string | null) {
-  const normalized = normalizeCategory(category)
+  const normalized = normalizeArtistCategoryLabel(category)
   const labels: Record<string, string> = {
-    singer: 'Singers',
-    dj: 'DJs',
-    dancer: 'Dancers',
-    comedian: 'Comedians',
-    'emcee / host': 'Anchors',
-    band: 'Bands',
-    photographer: 'Photographers',
-    other: 'Artists',
+    Singer: 'Singers',
+    'Bollywood Singer': 'Bollywood Singers',
+    'Wedding Singer': 'Wedding Singers',
+    'Devotional Singer': 'Devotional Singers',
+    'Live Musician': 'Live Musicians',
+    Band: 'Bands',
+    'Live Band': 'Live Bands',
+    'Acoustic Duo': 'Acoustic Duos',
+    DJ: 'DJs',
+    Dancer: 'Dancers',
+    'Bharatanatyam Dancer': 'Bharatanatyam Dancers',
+    'Bhangra Dancer': 'Bhangra Dancers',
+    'Hip Hop Dancer': 'Hip Hop Dancers',
+    'Contemporary Dancer': 'Contemporary Dancers',
+    'Belly Dancer': 'Belly Dancers',
+    'Choreographer': 'Choreographers',
+    'Emcee / Host': 'Emcees & Hosts',
+    Anchor: 'Anchors',
+    Comedian: 'Comedians',
+    Magician: 'Magicians',
+    Mentalist: 'Mentalists',
+    Photographer: 'Photographers',
+    'Drone Photographer': 'Drone Photographers',
+    Videographer: 'Videographers',
+    'Makeup Artist': 'Makeup Artists',
+    'Beauty Parlour / Salon': 'Beauty Parlours & Salons',
+    'Hair Stylist': 'Hair Stylists',
+    'Nail Artist': 'Nail Artists',
+    'Mehendi Artist': 'Mehendi Artists',
+    'Bridal Mehendi Artist': 'Bridal Mehendi Artists',
+    'Tattoo Artist': 'Tattoo Artists',
+    'Event Decorator': 'Event Decorators',
+    'Event Planner': 'Event Planners',
+    Guitarist: 'Guitarists',
+    Keyboardist: 'Keyboardists',
+    Drummer: 'Drummers',
+    Percussionist: 'Percussionists',
+    Saxophonist: 'Saxophonists',
+    Violinist: 'Violinists',
+    Flutist: 'Flutists',
+    'Tabla Player': 'Tabla Players',
+    'Qawwali Singer': 'Qawwali Singers',
+    'Folk Singer': 'Folk Singers',
+    'Classical Singer': 'Classical Singers',
+    'Kids Entertainer': 'Kids Entertainers',
+    'Storyteller': 'Storytellers',
+    'Caricature Artist': 'Caricature Artists',
+    'Face Painter': 'Face Painters',
+    'Balloon Artist': 'Balloon Artists',
+    'Celebrity Appearance': 'Celebrity Appearances',
+    'Puppet Show Artist': 'Puppet Show Artists',
+    Other: 'Artists',
   }
 
   return labels[normalized] ?? 'Browse Artists'

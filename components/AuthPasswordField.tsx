@@ -43,7 +43,7 @@ export default function AuthPasswordField({
           minLength={minLength}
           autoComplete={autoComplete}
           disabled={disabled}
-          className="w-full rounded-xl bg-white px-4 py-3 pr-12 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-[var(--accent-violet)]"
+          className="w-full rounded-xl bg-white px-4 py-3 pr-12 text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-[var(--accent-violet)] max-sm:border-[rgba(0,23,57,0.16)] max-sm:bg-[var(--surface-2)]"
           style={{ border: '1px solid var(--border)', color: 'var(--foreground)' }}
         />
         <button

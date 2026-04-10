@@ -20,7 +20,7 @@ export default function GoogleAuthButton({
       type="button"
       onClick={onClick}
       disabled={disabled || loading}
-      className={`inline-flex w-full items-center justify-center gap-3 rounded-xl border border-[color:var(--border)]/10 bg-white px-4 py-3 text-sm font-semibold text-[var(--foreground)] transition-all hover:-translate-y-0.5 hover:border-[color:var(--border)]/20 hover:bg-[var(--surface-2)] disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+      className={`inline-flex w-full items-center justify-center gap-3 rounded-xl border border-[color:var(--border)]/10 bg-white px-4 py-3 text-sm font-semibold text-[var(--foreground)] transition-all hover:-translate-y-0.5 hover:border-[color:var(--border)]/20 hover:bg-[var(--surface-2)] disabled:cursor-not-allowed disabled:opacity-60 max-sm:border-[rgba(0,23,57,0.14)] max-sm:bg-[var(--surface-2)] ${className}`}
     >
       <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 shrink-0">
         <path fill="#001739" d="M21.35 11.1h-9.17v2.9h5.26c-.23 1.24-.95 2.29-2.02 2.99v2.48h3.27c1.91-1.76 3.02-4.34 3.02-7.37 0-.69-.06-1.34-.17-2z" />
