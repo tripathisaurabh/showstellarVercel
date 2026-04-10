@@ -131,6 +131,19 @@ export default async function AdminPage({
           <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
             ShowStellar Management · {userRecord?.email ?? user.email}
           </p>
+          <div className="mt-4">
+            <Link
+              href="/admin/email-center"
+              className="inline-flex items-center rounded-full border px-4 py-2 text-sm font-semibold transition-colors"
+              style={{
+                background: 'rgba(0, 23, 57, 0.04)',
+                color: 'var(--navy)',
+                borderColor: 'rgba(0, 23, 57, 0.12)',
+              }}
+            >
+              Open Email Center
+            </Link>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2 mb-8">
