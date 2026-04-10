@@ -167,7 +167,7 @@ export function buildBrandedEmailHtml({
 }: BrandedEmailContent) {
   const formatSectionHtml = (section: string) =>
     escapeHtml(section).replace(/\*\*(.+?)\*\*/g, '<strong style="color:#001739;font-weight:700;">$1</strong>')
-  const resolvedHeaderLogoUrl = headerLogoUrl ?? 'https://showstellar.com/logo.png'
+  const resolvedHeaderLogoUrl = headerLogoUrl ?? 'https://showstellar.com/headerlogo.png'
 
   const sectionMarkup = sections
     .map(

@@ -67,7 +67,7 @@ export function buildBrandedEmailTemplate({
   mascotPath = '/illustrations/feedback/verification-star.svg',
 }: BuildBrandedEmailTemplateArgs) {
   const publicSite = isPublicHttpUrl(siteUrl) && !siteUrl.includes('localhost')
-  const logoUrl = 'https://showstellar.com/logo.png'
+  const logoUrl = 'https://showstellar.com/headerlogo.png'
   const mascotUrl = mascotPath && publicSite ? toAssetUrl(siteUrl, mascotPath) : null
   const bodyHtml = formatBodyHtml(body)
 
