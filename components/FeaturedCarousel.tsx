@@ -117,7 +117,7 @@ export default function FeaturedCarousel({ artists }: { artists: FeaturedArtistS
       <div
         ref={trackRef}
         onScroll={handleScroll}
-        className="flex items-stretch gap-5 overflow-x-auto no-scrollbar"
+        className="flex items-stretch gap-5 overflow-x-auto py-1 no-scrollbar"
         style={{ scrollSnapType: 'x mandatory', scrollBehavior: 'smooth' }}
       >
         {artists.map((artist, i) => (
@@ -125,17 +125,17 @@ export default function FeaturedCarousel({ artists }: { artists: FeaturedArtistS
             key={i}
             href={artist.href}
             data-fc
-            className="group flex-shrink-0 w-[82%] sm:w-[calc(50%-10px)] lg:w-[calc(33.333%-14px)] h-auto min-h-[520px] sm:h-[440px] sm:min-h-0"
+            className="group flex-shrink-0 w-[86%] sm:w-[calc(50%-10px)] lg:w-[calc(33.333%-14px)]"
             style={{ scrollSnapAlign: 'start' }}
           >
-            <article className="flex h-full min-h-[520px] flex-col overflow-hidden rounded-[1.75rem] border border-[rgba(0,23,57,0.08)] bg-white shadow-[0_20px_48px_rgba(0,23,57,0.10)] transition-all duration-200 hover:-translate-y-1 hover:border-[rgba(0,23,57,0.14)] hover:shadow-[0_28px_64px_rgba(0,23,57,0.18)] sm:min-h-0">
-              <div className="relative h-56 overflow-hidden flex-shrink-0">
+            <article className="flex min-h-[500px] flex-col overflow-hidden rounded-[1.75rem] border border-[rgba(0,23,57,0.08)] bg-white shadow-[0_20px_48px_rgba(0,23,57,0.10)] transition-all duration-200 hover:-translate-y-1 hover:border-[rgba(0,23,57,0.14)] hover:shadow-[0_28px_64px_rgba(0,23,57,0.18)] sm:min-h-[520px] lg:min-h-[540px]">
+              <div className="relative aspect-[4/3] overflow-hidden flex-shrink-0">
                 {artist.profileImage ? (
                   <Image
                     src={artist.profileImage}
                     alt={artist.displayName}
                     fill
-                    sizes="(max-width: 640px) 82vw, (max-width: 1024px) calc(50vw - 32px), calc(33vw - 32px)"
+                    sizes="(max-width: 640px) 86vw, (max-width: 1024px) calc(50vw - 32px), calc(33vw - 32px)"
                     className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                     loading={i < 3 ? 'eager' : 'lazy'}
                   />
@@ -153,9 +153,11 @@ export default function FeaturedCarousel({ artists }: { artists: FeaturedArtistS
               </div>
               <div className="flex flex-1 flex-col border-t border-[rgba(0,23,57,0.06)] bg-white p-5 sm:p-6">
                 <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-xl font-semibold tracking-tight text-[var(--foreground)]">{artist.displayName}</h3>
-                    <p className="mt-2 text-sm text-[var(--muted)]">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-xl font-semibold tracking-tight text-[var(--foreground)]">
+                      {artist.displayName}
+                    </h3>
+                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-[var(--muted)]">
                       {artist.categoryLabel || 'Artist'}
                       {artist.location ? ` • ${artist.location}` : ''}
                     </p>
@@ -187,13 +189,18 @@ export default function FeaturedCarousel({ artists }: { artists: FeaturedArtistS
                 )}
 
                 {artist.bio && (
-                  <p className="mt-4 line-clamp-2 text-sm leading-6 text-[var(--muted)]">{artist.bio}</p>
+                  <p className="mt-4 line-clamp-2 text-sm leading-6 text-[var(--muted)] sm:line-clamp-3">
+                    {artist.bio}
+                  </p>
                 )}
 
-                <div className="mt-auto flex items-center justify-end gap-3 pt-4 text-sm text-[var(--muted)] sm:pt-5">
+                <div className="mt-auto flex items-center justify-between gap-3 pt-5 text-sm text-[var(--muted)]">
                   <span className="inline-flex items-center gap-1 font-medium text-[var(--navy)]">
                     View profile
                     <ArrowRight className="h-4 w-4" />
+                  </span>
+                  <span className="text-xs uppercase tracking-[0.14em] text-[var(--muted-light)]">
+                    Tap to open
                   </span>
                 </div>
               </div>
