@@ -24,6 +24,10 @@ export default function ProfileEditorPage() {
   const router = useRouter()
   const mediaFileRef = useRef<HTMLInputElement>(null)
   const dpFileRef = useRef<HTMLInputElement>(null)
+  const MAX_PROFILE_IMAGE_SIZE_MB = 8
+  const MAX_MEDIA_SIZE_MB = 50
+  const allowedImageMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+  const allowedVideoMimeTypes = new Set(['video/mp4', 'video/webm', 'video/quicktime'])
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -76,6 +80,23 @@ export default function ProfileEditorPage() {
   function addCacheBuster(url: string) {
     const separator = url.includes('?') ? '&' : '?'
     return `${url}${separator}v=${Date.now()}`
+  }
+
+  function getFileTypeError(file: File, kind: 'image' | 'media') {
+    if (kind === 'image' && !allowedImageMimeTypes.has(file.type)) {
+      return 'Please upload a JPG, PNG, WebP, or GIF image.'
+    }
+
+    if (kind === 'media' && !allowedImageMimeTypes.has(file.type) && !allowedVideoMimeTypes.has(file.type)) {
+      return 'Please upload a JPG, PNG, WebP, GIF, MP4, WebM, or MOV file.'
+    }
+
+    const maxSize = kind === 'image' ? MAX_PROFILE_IMAGE_SIZE_MB : MAX_MEDIA_SIZE_MB
+    if (file.size > maxSize * 1024 * 1024) {
+      return `File must be ${maxSize}MB or smaller.`
+    }
+
+    return null
   }
 
   useEffect(() => {
@@ -171,6 +192,12 @@ export default function ProfileEditorPage() {
   async function handleDpUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    const validationError = getFileTypeError(file, 'image')
+    if (validationError) {
+      setError(validationError)
+      if (dpFileRef.current) dpFileRef.current.value = ''
+      return
+    }
     setUploadingDp(true)
     setError('')
     const previousProfileImage = form.profile_image
@@ -203,6 +230,12 @@ export default function ProfileEditorPage() {
   async function handleMediaUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    const validationError = getFileTypeError(file, 'media')
+    if (validationError) {
+      setError(validationError)
+      if (mediaFileRef.current) mediaFileRef.current.value = ''
+      return
+    }
     setUploadingMedia(true)
     setError('')
     try {
@@ -323,7 +356,13 @@ export default function ProfileEditorPage() {
                 )}
               </div>
               <div>
-                <input ref={dpFileRef} type="file" accept="image/*" onChange={handleDpUpload} className="hidden" />
+                <input
+                  ref={dpFileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={handleDpUpload}
+                  className="hidden"
+                />
                 <button
                   type="button"
                   onClick={() => dpFileRef.current?.click()}
@@ -334,7 +373,9 @@ export default function ProfileEditorPage() {
                   <Upload className="w-4 h-4" />
                   {uploadingDp ? 'Uploading…' : 'Upload Photo'}
                 </button>
-                <p className="text-xs mt-2" style={{ color: 'var(--muted)' }}>JPG, PNG — shown on your public profile</p>
+                <p className="text-xs mt-2" style={{ color: 'var(--muted)' }}>
+                  JPG, PNG, WebP, GIF up to {MAX_PROFILE_IMAGE_SIZE_MB}MB
+                </p>
               </div>
             </div>
           </div>
@@ -511,7 +552,13 @@ export default function ProfileEditorPage() {
             </div>
           )}
 
-          <input ref={mediaFileRef} type="file" accept="image/*,video/*" onChange={handleMediaUpload} className="hidden" />
+          <input
+            ref={mediaFileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+            onChange={handleMediaUpload}
+            className="hidden"
+          />
           <button
             type="button"
             onClick={() => mediaFileRef.current?.click()}
