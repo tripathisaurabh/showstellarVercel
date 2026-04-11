@@ -72,14 +72,38 @@ export function splitArtistParagraphs(value: MaybeString) {
 
 export function getArtistDisplayName(artist: PublicArtistRecord) {
   const username = trim((artist as PublicArtistRecord & { username?: MaybeString }).username)
+  const slugName = humanizeArtistSlug(artist.slug)
 
   return (
     trim(artist.stage_name) ||
     trim(artist.users?.full_name) ||
     username ||
-    trim(artist.slug) ||
+    slugName ||
     'ShowStellar Artist'
   )
+}
+
+export function humanizeArtistSlug(value: MaybeString) {
+  const slug = trim(value)
+  if (!slug) return ''
+
+  const parts = slug
+    .split('-')
+    .map(part => part.trim())
+    .filter(Boolean)
+
+  if (parts.length === 0) return ''
+
+  const lastPart = parts[parts.length - 1]
+  const looksLikeGeneratedSuffix = parts.length > 1 && /^[a-z0-9]{4,8}$/i.test(lastPart) && /\d/.test(lastPart)
+  const nameParts = looksLikeGeneratedSuffix ? parts.slice(0, -1) : parts
+
+  const humanized = nameParts
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+    .trim()
+
+  return humanized
 }
 
 export function getArtistInitials(artist: PublicArtistRecord) {
