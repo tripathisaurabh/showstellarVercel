@@ -17,6 +17,8 @@ export type PublicArtistRecord = {
   languages_spoken?: MaybeString
   pricing_start?: number | string | null
   profile_image?: MaybeString
+  profile_image_cropped?: MaybeString
+  profile_image_original?: MaybeString
   is_featured?: boolean | null
   approval_status?: MaybeString
   rating?: number | string | null

@@ -137,13 +137,12 @@ export default async function HomePage() {
   const featuredSlots: FeaturedArtistSlot[] = featuredArtists.map(artist => ({
     href: getArtistPublicPath(artist),
     displayName: getArtistDisplayName(artist),
-    categoryLabel: getArtistCategories(artist).summary || 'Artist',
+    categories: getArtistCategories(artist).combined,
     location: getArtistLocation(artist) || null,
-    profileImage: artist.profile_image ?? null,
+    profileImage: artist.profile_image_cropped ?? artist.profile_image ?? null,
     pricingStart: artist.pricing_start != null ? Number(artist.pricing_start) : null,
     bio: artist.bio ?? null,
     isFeatured: !!artist.is_featured,
-    rating: artist.rating != null ? Number(artist.rating) : null,
     experienceYears: artist.experience_years != null ? Number(artist.experience_years) : null,
   }))
 

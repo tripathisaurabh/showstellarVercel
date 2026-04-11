@@ -21,6 +21,8 @@ type ArtistProfileUpdateBody = {
   event_types?: string
   languages_spoken?: string
   profile_image?: string
+  profile_image_cropped?: string
+  profile_image_original?: string | null
   categories?: string[]
   custom_categories?: string[]
   category?: string
@@ -130,25 +132,65 @@ export async function PATCH(request: Request) {
     experienceYears = parsed
   }
 
-  const { error: updateError } = await supabase
+  const profileImage = body.profile_image?.trim() || null
+  const profileImageCropped = body.profile_image_cropped?.trim() || profileImage
+  const profileImageOriginal = body.profile_image_original?.trim() || null
+
+  const updatePayload = {
+    stage_name: body.stage_name?.trim() || null,
+    bio: body.bio ?? null,
+    pricing_start: Number.isFinite(pricingStart) ? pricingStart : null,
+    locality: body.locality?.trim() || null,
+    city: body.city?.trim() || null,
+    state: body.state?.trim() || null,
+    performance_style: body.performance_style?.trim() || null,
+    event_types: body.event_types?.trim() || null,
+    languages_spoken: body.languages_spoken?.trim() || null,
+    profile_image: profileImageCropped,
+    profile_image_cropped: profileImageCropped,
+    profile_image_original: profileImageOriginal,
+    categories: selection.categories,
+    custom_categories: selection.customCategories,
+    category_id: primaryCategoryId,
+    experience_years: experienceYears,
+  }
+
+  let { error: updateError } = await supabase
     .from('artist_profiles')
-    .update({
-      stage_name: body.stage_name?.trim() || null,
-      bio: body.bio ?? null,
-      pricing_start: Number.isFinite(pricingStart) ? pricingStart : null,
-      locality: body.locality?.trim() || null,
-      city: body.city?.trim() || null,
-      state: body.state?.trim() || null,
-      performance_style: body.performance_style?.trim() || null,
-      event_types: body.event_types?.trim() || null,
-      languages_spoken: body.languages_spoken?.trim() || null,
-      profile_image: body.profile_image?.trim() || null,
-      categories: selection.categories,
-      custom_categories: selection.customCategories,
-      category_id: primaryCategoryId,
-      experience_years: experienceYears,
-    })
+    .update(updatePayload as Record<string, unknown>)
     .eq('id', profile.id)
+
+  const isMissingColumnError =
+    updateError?.code === '42703' ||
+    updateError?.code === 'PGRST204' ||
+    (typeof updateError?.message === 'string' &&
+      updateError.message.includes("Could not find the 'profile_image_cropped' column"))
+
+  if (isMissingColumnError) {
+    const fallbackPayload = {
+      stage_name: updatePayload.stage_name,
+      bio: updatePayload.bio,
+      pricing_start: updatePayload.pricing_start,
+      locality: updatePayload.locality,
+      city: updatePayload.city,
+      state: updatePayload.state,
+      performance_style: updatePayload.performance_style,
+      event_types: updatePayload.event_types,
+      languages_spoken: updatePayload.languages_spoken,
+      profile_image: profileImageCropped,
+      categories: updatePayload.categories,
+      custom_categories: updatePayload.custom_categories,
+      category_id: updatePayload.category_id,
+      experience_years: updatePayload.experience_years,
+    }
+
+    const fallbackResult = await supabase
+      .from('artist_profiles')
+      .update(fallbackPayload as Record<string, unknown>)
+      .eq('id', profile.id)
+
+    updateError = fallbackResult.error
+  }
 
   if (updateError) {
     console.error('[artist-profile] update failed:', updateError)

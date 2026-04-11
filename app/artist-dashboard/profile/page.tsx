@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import ArtistDashboardShell from '@/components/ArtistDashboardShell'
 import CategorySelector from '@/components/CategorySelector'
+import ProfilePhotoCropModal from '@/components/ProfilePhotoCropModal'
 import { ProfileEditorSkeleton } from '@/components/ShowStellarSkeletons'
 import { Upload, Trash2, Save } from 'lucide-react'
 import {
@@ -17,6 +18,7 @@ import {
   type PublicArtistRecord,
 } from '@/lib/artist-profile'
 import { ARTIST_CATEGORY_OPTIONS } from '@/lib/artist-categories'
+import { createCroppedImageBlob, type ImageCropGeometry } from '@/lib/image-crop'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,17 +26,27 @@ export default function ProfileEditorPage() {
   const router = useRouter()
   const mediaFileRef = useRef<HTMLInputElement>(null)
   const dpFileRef = useRef<HTMLInputElement>(null)
-  const MAX_PROFILE_IMAGE_SIZE_MB = 8
+  const MAX_PROFILE_IMAGE_SIZE_MB = 5
   const MAX_MEDIA_SIZE_MB = 50
-  const allowedImageMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+  const allowedImageMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
   const allowedVideoMimeTypes = new Set(['video/mp4', 'video/webm', 'video/quicktime'])
+
+  type PhotoBusyState = {
+    phase: 'preparing' | 'optimizing' | 'uploading' | 'saving'
+    message: string
+    progress: number
+  } | null
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [uploadingDp, setUploadingDp] = useState(false)
   const [uploadingMedia, setUploadingMedia] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [photoToast, setPhotoToast] = useState('')
+  const [photoError, setPhotoError] = useState('')
+  const [photoBusyState, setPhotoBusyState] = useState<PhotoBusyState>(null)
+  const [photoCropOpen, setPhotoCropOpen] = useState(false)
+  const [pendingPhotoFile, setPendingPhotoFile] = useState<File | null>(null)
   const [profileId, setProfileId] = useState('')
   const [artistName, setArtistName] = useState('')
   const [publicPath, setPublicPath] = useState('')
@@ -59,6 +71,8 @@ export default function ProfileEditorPage() {
     event_types: '',
     languages_spoken: '',
     profile_image: '',
+    profile_image_cropped: '',
+    profile_image_original: '',
     experience_years: '',
   })
 
@@ -71,24 +85,24 @@ export default function ProfileEditorPage() {
     if (file.type === 'image/jpeg') return 'jpg'
     if (file.type === 'image/png') return 'png'
     if (file.type === 'image/webp') return 'webp'
-    if (file.type === 'image/gif') return 'gif'
     if (file.type === 'video/mp4') return 'mp4'
 
     return 'bin'
   }
 
-  function addCacheBuster(url: string) {
-    const separator = url.includes('?') ? '&' : '?'
-    return `${url}${separator}v=${Date.now()}`
+  function createUploadId() {
+    return typeof globalThis.crypto?.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
   }
 
   function getFileTypeError(file: File, kind: 'image' | 'media') {
     if (kind === 'image' && !allowedImageMimeTypes.has(file.type)) {
-      return 'Please upload a JPG, PNG, WebP, or GIF image.'
+      return 'Please upload a JPG, PNG, or WebP image.'
     }
 
     if (kind === 'media' && !allowedImageMimeTypes.has(file.type) && !allowedVideoMimeTypes.has(file.type)) {
-      return 'Please upload a JPG, PNG, WebP, GIF, MP4, WebM, or MOV file.'
+      return 'Please upload a JPG, PNG, WebP, MP4, WebM, or MOV file.'
     }
 
     const maxSize = kind === 'image' ? MAX_PROFILE_IMAGE_SIZE_MB : MAX_MEDIA_SIZE_MB
@@ -139,7 +153,9 @@ export default function ProfileEditorPage() {
           performance_style: profile.performance_style ?? '',
           event_types: profile.event_types ?? '',
           languages_spoken: profile.languages_spoken ?? '',
-          profile_image: profile.profile_image ?? '',
+          profile_image: profile.profile_image_cropped ?? profile.profile_image ?? '',
+          profile_image_cropped: profile.profile_image_cropped ?? profile.profile_image ?? '',
+          profile_image_original: profile.profile_image_original ?? '',
           experience_years: profile.experience_years?.toString() ?? '',
         })
         const profileCategories = getArtistCategories(profile)
@@ -171,6 +187,9 @@ export default function ProfileEditorPage() {
           ...form,
           categories: categorySelection.categories,
           custom_categories: categorySelection.customCategories,
+          profile_image: form.profile_image,
+          profile_image_cropped: form.profile_image_cropped,
+          profile_image_original: form.profile_image_original,
         }),
       })
 
@@ -189,7 +208,7 @@ export default function ProfileEditorPage() {
     }
   }
 
-  async function handleDpUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleDpSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     const validationError = getFileTypeError(file, 'image')
@@ -198,32 +217,101 @@ export default function ProfileEditorPage() {
       if (dpFileRef.current) dpFileRef.current.value = ''
       return
     }
-    setUploadingDp(true)
     setError('')
+    setPhotoError('')
+    setPendingPhotoFile(file)
+    setPhotoCropOpen(true)
+    if (dpFileRef.current) dpFileRef.current.value = ''
+  }
+
+  async function handleCropConfirm(geometry: ImageCropGeometry) {
+    if (!pendingPhotoFile) {
+      setPhotoError('No profile photo was selected.')
+      return
+    }
+
     const previousProfileImage = form.profile_image
+    const previousCroppedImage = form.profile_image_cropped
+    const previousOriginalImage = form.profile_image_original
+    const timestamp = Date.now()
+
     try {
+      setPhotoError('')
+      setPhotoBusyState({ phase: 'preparing', message: 'Preparing photo...', progress: 16 })
+      await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()))
+      setPhotoBusyState({ phase: 'optimizing', message: 'Optimizing image...', progress: 28 })
+      const { blob: croppedBlob } = await createCroppedImageBlob(pendingPhotoFile, geometry)
+
+      setPhotoBusyState({ phase: 'uploading', message: 'Uploading profile photo...', progress: 72 })
       const supabase = getSupabase()
-      const ext = getSafeFileExtension(file)
-      const path = `dp/${profileId}/${Date.now()}-${crypto.randomUUID()}.${ext}`
-      const { error: uploadError } = await supabase.storage
-        .from('artist-media')
-        .upload(path, file, { upsert: true })
-      if (uploadError) throw uploadError
+      const originalExt = getSafeFileExtension(pendingPhotoFile)
+      const croppedPath = `dp/${profileId}/${timestamp}-${createUploadId()}.jpg`
+      const originalPath = `dp-original/${profileId}/${timestamp}-${createUploadId()}.${originalExt}`
 
-      const { data: { publicUrl } } = supabase.storage.from('artist-media').getPublicUrl(path)
-      const cacheBustedProfileUrl = addCacheBuster(publicUrl)
-      set('profile_image', cacheBustedProfileUrl)
+      const [croppedUpload, originalUpload] = await Promise.all([
+        supabase.storage.from('artist-media').upload(croppedPath, croppedBlob, {
+          upsert: true,
+          contentType: 'image/jpeg',
+        }),
+        supabase.storage.from('artist-media').upload(originalPath, pendingPhotoFile, {
+          upsert: true,
+        }),
+      ])
 
-      const { error: updateError } = await supabase.from('artist_profiles').update({ profile_image: cacheBustedProfileUrl }).eq('id', profileId)
-      if (updateError) throw updateError
+      if (croppedUpload.error) {
+        throw croppedUpload.error
+      }
 
+      const {
+        data: { publicUrl: croppedPublicUrl },
+      } = supabase.storage.from('artist-media').getPublicUrl(croppedPath)
+      const originalPublicUrl = originalUpload.error
+        ? null
+        : supabase.storage.from('artist-media').getPublicUrl(originalPath).data.publicUrl
+
+      setPhotoBusyState({ phase: 'saving', message: 'Saving changes...', progress: 92 })
+      const response = await fetch('/api/artist-profile', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          profile_image: croppedPublicUrl,
+          profile_image_cropped: croppedPublicUrl,
+          profile_image_original: originalPublicUrl,
+          categories: categorySelection.categories,
+          custom_categories: categorySelection.customCategories,
+        }),
+      })
+
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(payload?.error ?? 'Failed to save profile photo')
+      }
+
+      setForm(current => ({
+        ...current,
+        profile_image: croppedPublicUrl,
+        profile_image_cropped: croppedPublicUrl,
+        profile_image_original: originalPublicUrl ?? previousOriginalImage,
+      }))
+      setPhotoCropOpen(false)
+      setPendingPhotoFile(null)
+      setPhotoBusyState(null)
+      setPhotoError('')
+      setPhotoToast('Profile photo updated successfully')
+      window.setTimeout(() => setPhotoToast(''), 3000)
       router.refresh()
     } catch (err: unknown) {
-      set('profile_image', previousProfileImage)
-      setError(err instanceof Error ? err.message : 'Failed to upload profile image')
-    } finally {
-      setUploadingDp(false)
-      if (dpFileRef.current) dpFileRef.current.value = ''
+      setForm(current => ({
+        ...current,
+        profile_image: previousProfileImage,
+        profile_image_cropped: previousCroppedImage,
+        profile_image_original: previousOriginalImage,
+      }))
+      setPhotoBusyState(null)
+      setPhotoError(err instanceof Error ? err.message : 'Failed to upload profile image')
+      throw err
     }
   }
 
@@ -255,7 +343,7 @@ export default function ProfileEditorPage() {
         .insert({ artist_id: profileId, media_url: publicUrl, type })
       if (insertError) throw insertError
 
-      setMedia(m => [...m, { id: crypto.randomUUID(), media_url: publicUrl, type }])
+      setMedia(m => [...m, { id: createUploadId(), media_url: publicUrl, type }])
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to upload media')
     } finally {
@@ -359,22 +447,22 @@ export default function ProfileEditorPage() {
                 <input
                   ref={dpFileRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif"
-                  onChange={handleDpUpload}
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handleDpSelect}
                   className="hidden"
                 />
                 <button
                   type="button"
                   onClick={() => dpFileRef.current?.click()}
-                  disabled={uploadingDp}
+                  disabled={saving || Boolean(photoBusyState)}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium border transition-colors hover:opacity-80 disabled:opacity-50"
                   style={{ border: '1px solid var(--border)', color: 'var(--foreground)' }}
                 >
                   <Upload className="w-4 h-4" />
-                  {uploadingDp ? 'Uploading…' : 'Upload Photo'}
+                  Upload Photo
                 </button>
-                <p className="text-xs mt-2" style={{ color: 'var(--muted)' }}>
-                  JPG, PNG, WebP, GIF up to {MAX_PROFILE_IMAGE_SIZE_MB}MB
+                <p className="text-xs mt-2 leading-6" style={{ color: 'var(--muted)' }}>
+                  JPG, PNG, or WebP up to {MAX_PROFILE_IMAGE_SIZE_MB}MB. A 4:5 crop will be prepared before upload.
                 </p>
               </div>
             </div>
@@ -573,6 +661,35 @@ export default function ProfileEditorPage() {
             Gallery uploads support JPG, PNG, WebP, GIF, MP4, WebM, and MOV files up to {MAX_MEDIA_SIZE_MB}MB.
           </p>
         </div>
+
+        <ProfilePhotoCropModal
+          open={photoCropOpen}
+          file={pendingPhotoFile}
+          busyState={photoBusyState}
+          error={photoError || null}
+          onCancel={() => {
+            setPhotoCropOpen(false)
+            setPendingPhotoFile(null)
+            setPhotoBusyState(null)
+            setPhotoError('')
+            if (dpFileRef.current) dpFileRef.current.value = ''
+          }}
+          onConfirm={handleCropConfirm}
+        />
+
+        {photoToast ? (
+          <div className="pointer-events-none fixed bottom-5 right-5 z-50 max-w-sm">
+            <div
+              className="rounded-2xl border px-4 py-3 text-sm font-medium text-white shadow-[0_18px_60px_rgba(0,23,57,0.28)]"
+              style={{
+                borderColor: 'rgba(255,255,255,0.16)',
+                background: 'linear-gradient(135deg, #001739 0%, #16386c 100%)',
+              }}
+            >
+              {photoToast}
+            </div>
+          </div>
+        ) : null}
       </div>
     </ArtistDashboardShell>
   )
