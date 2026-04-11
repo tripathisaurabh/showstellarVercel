@@ -476,7 +476,16 @@ function AdminArtistCardRow({ artist }: { artist: AdminArtistCard }) {
             View page
           </Link>
         </div>
-        <AdminArtistActions artistId={artist.id} currentStatus={artist.approvalStatus} isFeatured={artist.isFeatured} />
+        <div className="flex flex-col items-end gap-2">
+          <Link
+            href={`/admin/artists/${artist.id}/edit`}
+            className="text-xs px-3 py-1.5 rounded-lg border font-medium"
+            style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
+          >
+            Edit artist
+          </Link>
+          <AdminArtistActions artistId={artist.id} currentStatus={artist.approvalStatus} isFeatured={artist.isFeatured} />
+        </div>
       </div>
     </div>
   )

@@ -1,7 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
-import { ArrowLeft, CalendarDays, Mail, Phone, Star, Users } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Edit3, Mail, Phone, Star, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import AdminArtistActions from '@/components/AdminArtistActions'
 import BrandLogo from '@/components/BrandLogo'
@@ -65,6 +65,14 @@ export default async function AdminArtistDetailPage({
           </div>
 
           <div className="flex items-start gap-3">
+            <Link
+              href={`/admin/artists/${artist.id}/edit`}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border"
+              style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
+            >
+              <Edit3 className="w-4 h-4" />
+              Edit artist
+            </Link>
             <AdminArtistActions artistId={artist.id} currentStatus={artist.approvalStatus} isFeatured={artist.isFeatured} />
             <Link
               href={`/admin?tab=inquiries&artistId=${artist.id}`}
@@ -168,6 +176,7 @@ export default async function AdminArtistDetailPage({
             </div>
 
             <div className="space-y-3 text-sm">
+              <MetaRow label="Full name" value={artist.fullName || '—'} />
               <MetaRow label="Stage name" value={artist.stageName || '—'} />
               <MetaRow label="City" value={artist.city || '—'} />
               <MetaRow label="Locality" value={artist.location || '—'} />

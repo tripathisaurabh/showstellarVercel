@@ -84,8 +84,10 @@ export type AdminInquiryRow = {
 
 export type AdminArtistCard = {
   id: string
+  userId: string | null
   slug: string | null
   displayName: string
+  fullName: string | null
   categoryName: string
   categoryNames: string[]
   customCategories: string[]
@@ -94,6 +96,8 @@ export type AdminArtistCard = {
   location: string
   email: string
   phoneNumber: string
+  locality: string
+  state: string
   approvalStatus: 'draft' | 'pending' | 'approved' | 'rejected'
   isFeatured: boolean
   emailVerified: boolean
@@ -233,13 +237,17 @@ function buildArtistCard(
 
   return {
     id: row.id,
+    userId: row.users?.id ?? null,
     slug: row.slug ?? null,
     displayName: getArtistDisplayName(row),
+    fullName: row.users?.full_name ?? null,
     categoryName: categoryData.primary,
     categoryNames: categoryData.combined,
     customCategories: categoryData.custom,
     categorySummary: categoryData.summary,
     city: row.city ?? '',
+    locality: row.locality ?? '',
+    state: row.state ?? '',
     location: getArtistLocation(row),
     email: row.users?.email ?? '',
     phoneNumber: row.users?.phone_number ?? '',
@@ -254,7 +262,7 @@ function buildArtistCard(
     bio: row.bio ?? null,
     pricingStart: row.pricing_start ?? null,
     stageName: row.stage_name ?? null,
-    profileImage: row.profile_image ?? null,
+    profileImage: row.profile_image_cropped ?? row.profile_image ?? null,
     performanceStyle: row.performance_style ?? null,
     eventTypes: row.event_types ?? null,
     languagesSpoken: row.languages_spoken ?? null,
@@ -315,7 +323,7 @@ export async function loadAdminDashboardData() {
   const [artistsResult, inquiriesResult] = await Promise.all([
     adminClient
       .from('artist_profiles')
-      .select('id, slug, stage_name, category_id, locality, city, state, bio, performance_style, event_types, languages_spoken, pricing_start, profile_image, is_featured, approval_status, created_at, users(id, full_name, phone_number, email, created_at), primary_category:categories(name), categories, custom_categories, artist_media(id)')
+      .select('id, slug, stage_name, category_id, locality, city, state, bio, performance_style, event_types, languages_spoken, pricing_start, profile_image, profile_image_cropped, profile_image_original, is_featured, approval_status, created_at, users(id, full_name, phone_number, email, created_at), primary_category:categories(name), categories, custom_categories, artist_media(id)')
       .order('created_at', { ascending: false }),
     adminClient
       .from('booking_inquiries')
@@ -378,7 +386,7 @@ export async function loadAdminArtistDetail(artistId: string) {
 
   const { data: artistData, error: artistError } = await adminClient
     .from('artist_profiles')
-    .select('id, slug, stage_name, category_id, locality, city, state, bio, performance_style, event_types, languages_spoken, pricing_start, profile_image, is_featured, approval_status, created_at, users(id, full_name, phone_number, email, created_at), primary_category:categories(name), categories, custom_categories, artist_media(id, media_url, type)')
+    .select('id, slug, stage_name, category_id, locality, city, state, bio, performance_style, event_types, languages_spoken, pricing_start, profile_image, profile_image_cropped, profile_image_original, is_featured, approval_status, created_at, users(id, full_name, phone_number, email, created_at), primary_category:categories(name), categories, custom_categories, artist_media(id, media_url, type)')
     .eq('id', artistId)
     .maybeSingle()
 
@@ -392,7 +400,7 @@ export async function loadAdminArtistDetail(artistId: string) {
 
   const { data: inquiriesData, error: inquiriesError } = await adminClient
     .from('booking_inquiries')
-    .select('id, artist_id, client_name, client_phone, client_email, event_type, custom_event_type, event_size, event_duration, venue_type, event_date, city, artist_price, client_offer, additional_details, budget, message, status, created_at, artist_profiles(id, slug, stage_name, pricing_start, approval_status, is_featured, city, created_at, users(id, full_name, phone_number, email, created_at), primary_category:categories(name), categories, custom_categories)')
+    .select('id, artist_id, client_name, client_phone, client_email, event_type, custom_event_type, event_size, event_duration, venue_type, event_date, city, artist_price, client_offer, additional_details, budget, message, status, created_at, artist_profiles(id, slug, stage_name, pricing_start, approval_status, is_featured, city, profile_image, profile_image_cropped, profile_image_original, created_at, users(id, full_name, phone_number, email, created_at), primary_category:categories(name), categories, custom_categories)')
     .eq('artist_id', artistId)
     .order('created_at', { ascending: false })
 
@@ -419,7 +427,7 @@ export async function loadAdminInquiryDetail(inquiryId: string) {
 
   const { data: inquiryData, error } = await adminClient
     .from('booking_inquiries')
-    .select('id, artist_id, client_name, client_phone, client_email, event_type, custom_event_type, event_size, event_duration, venue_type, event_date, city, artist_price, client_offer, additional_details, budget, message, status, created_at, artist_profiles(id, slug, stage_name, pricing_start, approval_status, is_featured, city, created_at, users(id, full_name, phone_number, email, created_at), primary_category:categories(name), categories, custom_categories, artist_media(id, media_url, type))')
+    .select('id, artist_id, client_name, client_phone, client_email, event_type, custom_event_type, event_size, event_duration, venue_type, event_date, city, artist_price, client_offer, additional_details, budget, message, status, created_at, artist_profiles(id, slug, stage_name, pricing_start, approval_status, is_featured, city, profile_image, profile_image_cropped, profile_image_original, created_at, users(id, full_name, phone_number, email, created_at), primary_category:categories(name), categories, custom_categories, artist_media(id, media_url, type))')
     .eq('id', inquiryId)
     .maybeSingle()
 
