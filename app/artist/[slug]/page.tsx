@@ -19,7 +19,17 @@ import {
   splitArtistParagraphs,
   type PublicArtistRecord,
 } from '@/lib/artist-profile'
-import { absoluteUrl, seoDefaults } from '@/lib/seo'
+import {
+  buildArtistBreadcrumbJsonLd,
+  buildArtistMetadata,
+  buildArtistSeoLandingPath,
+  buildArtistServiceJsonLd,
+  getArtistSeoCityLabel,
+  getArtistSeoCategoryLabel,
+  getArtistSeoCategorySlug,
+  resolveSeoCategoryDefinition,
+} from '@/lib/seo-pages'
+import { getSiteUrl } from '@/lib/seo'
 
 async function loadArtistBySlug(supabase: Awaited<ReturnType<typeof createClient>>, slug: string) {
   const baseQuery = supabase
@@ -72,28 +82,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     }
   }
 
-  const displayName = getArtistDisplayName(artist)
-  const categoryData = getArtistCategories(artist)
-  const categoryName = categoryData.primary
-  const location = getArtistLocation(artist)
-  const canonicalPath = getArtistPublicPath(artist)
-  const summary = getArtistSummaryLine(artist)
-
-  return {
-    title: `${displayName} | ${categoryName}`,
-    description: `${summary}${location ? ` Book ${displayName} in ${location}.` : ` Book ${displayName} for your next event.`}`,
-    alternates: {
-      canonical: canonicalPath,
-    },
-    openGraph: {
-      title: `${displayName} | ShowStellar`,
-      description: summary,
-      url: absoluteUrl(canonicalPath),
-      images: artist.profile_image
-        ? [{ url: artist.profile_image, width: 1200, height: 900, alt: displayName }]
-        : [{ url: absoluteUrl(seoDefaults.image), width: 1200, height: 630, alt: displayName }],
-    },
-  }
+  return buildArtistMetadata(artist)
 }
 
 export default async function ArtistProfilePage({ params }: { params: Promise<{ slug: string }> }) {
@@ -117,7 +106,7 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
   const origin =
     forwardedProto && forwardedHost
       ? `${forwardedProto}://${forwardedHost}`
-      : process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+      : getSiteUrl()
   const artistProfileUrl = new URL(canonicalPath, origin).toString()
 
   const displayName   = getArtistDisplayName(artist)
@@ -139,6 +128,9 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
   const experienceYears = artist.experience_years != null ? Number(artist.experience_years) : null
   const hasDetails    = eventTypes.length > 0 || languages.length > 0 || !!location || !!artist.performance_style || experienceYears != null
   const hasMedia      = images.length > 0 || videos.length > 0
+  const seoLandingPath = buildArtistSeoLandingPath(artist)
+  const seoCategoryLabel = resolveSeoCategoryDefinition(getArtistSeoCategorySlug(artist))?.pluralLabel ?? `${getArtistSeoCategoryLabel(artist)}s`
+  const seoCityLabel = getArtistSeoCityLabel(artist)
 
   const CARD = {
     background: '#ffffff',
@@ -148,6 +140,18 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--background)' }}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@graph': [
+              buildArtistBreadcrumbJsonLd(artist, canonicalPath),
+              buildArtistServiceJsonLd(artist, canonicalPath),
+            ],
+          }),
+        }}
+      />
 
       {/* Breadcrumb */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-4">
@@ -238,6 +242,18 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
                 <p className="text-sm leading-relaxed mb-4" style={{ color: 'var(--muted)', maxWidth: '560px' }}>
                   {summaryLine}
                 </p>
+              )}
+
+              {seoLandingPath && (
+                <div className="mb-4">
+                  <Link
+                    href={seoLandingPath}
+                    className="inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors hover:bg-[var(--surface-2)]"
+                    style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
+                  >
+                    Browse more {seoCategoryLabel} in {seoCityLabel}
+                  </Link>
+                </div>
               )}
 
               {categoryData.combined.length > 0 && (
