@@ -1,7 +1,7 @@
-const DEFAULT_SITE_URL = 'http://localhost:3000'
+import { getSiteUrl } from '@/lib/seo'
 
 export function getPublicSiteUrl() {
-  return (process.env.NEXT_PUBLIC_SITE_URL ?? DEFAULT_SITE_URL).replace(/\/+$/, '')
+  return getSiteUrl()
 }
 
 export function buildAuthCallbackUrl(nextPath: string) {

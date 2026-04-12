@@ -8,7 +8,7 @@ function normalizeSiteUrl(value: string) {
     const url = new URL(trimmed)
     const hostname = url.hostname.toLowerCase()
 
-    if (hostname === 'showstellar.in' || hostname === 'www.showstellar.in') {
+    if (hostname === 'showstellar.com' || hostname === 'www.showstellar.com' || hostname === 'showstellar.in' || hostname === 'www.showstellar.in') {
       url.protocol = 'https:'
       url.hostname = 'www.showstellar.in'
       url.port = ''
