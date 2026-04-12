@@ -17,6 +17,7 @@ import {
 import {
   getArtistCategories,
   getArtistDisplayName,
+  getArtistExperienceYears,
   getArtistLocation,
   getArtistPublicPath,
   getArtistSummaryLine,
@@ -57,9 +58,12 @@ function getLocationText(artist: PublicArtistRecord) {
   return trimText(getArtistLocation(artist) || artist.city) || FALLBACK_LOCATION
 }
 
-function getExperienceText(value?: number | null) {
-  if (value == null || value <= 0) return FALLBACK_EXPERIENCE
-  return `${value} ${value === 1 ? 'year' : 'years'}`
+function getExperienceText(value?: number | string | null) {
+  if (value == null || value === '') return FALLBACK_EXPERIENCE
+  const years = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(years) || years < 0) return FALLBACK_EXPERIENCE
+  const normalized = Math.floor(years)
+  return `${normalized} ${normalized === 1 ? 'year' : 'years'}`
 }
 
 function getBioText(artist: PublicArtistRecord) {
@@ -149,7 +153,7 @@ export default async function CityCategorySeoPage({ params }: { params: PagePara
               const priceText = getPriceText(artist.pricing_start)
               const categoryText = getCategoryText(artist)
               const locationText = getLocationText(artist)
-              const experienceText = getExperienceText(artist.experience_years)
+              const experienceText = getExperienceText(getArtistExperienceYears(artist))
               const bioText = getBioText(artist)
               const image = artist.profile_image_cropped ?? artist.profile_image ?? null
 

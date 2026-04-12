@@ -17,6 +17,8 @@ import {
 import {
   ADMIN_MEDIA_MAX_SIZE_MB,
   ADMIN_PROFILE_IMAGE_MAX_SIZE_MB,
+  MAX_ARTIST_MEDIA_ITEMS,
+  getArtistMediaLimitError,
   getAdminFileTypeError,
 } from '@/lib/admin-file-upload'
 import { ARTIST_CATEGORY_OPTIONS } from '@/lib/artist-categories'
@@ -117,6 +119,7 @@ export default function AdminArtistProfileEditor({
     custom_categories: categorySelection.customCategories,
     primary_category: null,
   } as PublicArtistRecord)
+  const mediaLimitReached = media.length >= MAX_ARTIST_MEDIA_ITEMS
 
   function updateField<K extends keyof ArtistEditorForm>(key: K, value: ArtistEditorForm[K]) {
     setForm(current => ({ ...current, [key]: value }))
@@ -213,6 +216,14 @@ export default function AdminArtistProfileEditor({
 
     setError('')
     setSuccess('')
+
+    const limitError = getArtistMediaLimitError(media.length, files.length)
+    if (limitError) {
+      setError(limitError)
+      if (mediaInputRef.current) mediaInputRef.current.value = ''
+      return
+    }
+
     setMediaUploading(true)
     setMediaProgress(0)
 
@@ -639,17 +650,17 @@ export default function AdminArtistProfileEditor({
                 <button
                   type="button"
                   onClick={() => mediaInputRef.current?.click()}
-                  disabled={mediaUploading || Boolean(photoBusyState)}
+                  disabled={mediaUploading || Boolean(photoBusyState) || mediaLimitReached}
                   className="inline-flex items-center gap-2 rounded-xl bg-[var(--navy)] px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
                   <Upload className="h-4 w-4" />
-                  {mediaUploading ? 'Uploading…' : 'Upload media'}
+                  {mediaUploading ? 'Uploading…' : mediaLimitReached ? 'Limit reached' : 'Upload media'}
                 </button>
               </div>
             </div>
 
             <p className="mt-2 text-xs leading-6 text-[var(--muted)]">
-              Gallery uploads support JPG, PNG, WebP, MP4, WebM, and MOV files up to {ADMIN_MEDIA_MAX_SIZE_MB}MB.
+              Gallery uploads support JPG, PNG, WebP, MP4, WebM, and MOV files up to {ADMIN_MEDIA_MAX_SIZE_MB}MB. Up to {MAX_ARTIST_MEDIA_ITEMS} media items total.
             </p>
 
             {mediaUploading && (
@@ -679,7 +690,15 @@ export default function AdminArtistProfileEditor({
                       {item.type === 'video' ? (
                         <video src={item.media_url} className="h-full w-full object-cover bg-black" controls />
                       ) : (
-                        <Image src={item.media_url} alt={displayName} fill className="object-cover object-top" sizes="(max-width: 768px) 100vw, 33vw" />
+                        <a
+                          href={item.media_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={`Open media item for ${displayName}`}
+                          className="block h-full w-full"
+                        >
+                          <Image src={item.media_url} alt={displayName} fill className="object-cover object-top" sizes="(max-width: 768px) 100vw, 33vw" />
+                        </a>
                       )}
                     </div>
                     <div className="flex items-center justify-between gap-3 px-4 py-3">

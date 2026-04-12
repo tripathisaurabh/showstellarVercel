@@ -8,6 +8,7 @@ import Footer from '@/components/Footer'
 import ArtistFilters from '@/components/ArtistFilters'
 import {
   getArtistDisplayName,
+  getArtistExperienceText,
   getArtistLocation,
   getArtistPublicPath,
   getArtistCategories,
@@ -128,8 +129,8 @@ function getBrowseArtistLocationText(artist: PublicArtistRecord) {
 }
 
 function getBrowseArtistExperienceText(value?: number | null) {
-  if (value == null || value <= 0) return FALLBACK_EXPERIENCE
-  return `${value} ${value === 1 ? 'year' : 'years'}`
+  if (value == null || value < 0) return FALLBACK_EXPERIENCE
+  return `${Math.floor(value)} ${Math.floor(value) === 1 ? 'year' : 'years'}`
 }
 
 function getBrowseArtistBioText(artist: PublicArtistRecord) {
@@ -264,7 +265,7 @@ export default async function BrowseArtistsPage({ searchParams }: { searchParams
                 const priceText = getBrowseArtistPriceText(artist.pricing_start)
                 const categoryText = getBrowseArtistCategoryText(artist)
                 const locationText = getBrowseArtistLocationText(artist)
-                const experienceText = getBrowseArtistExperienceText(artist.experience_years)
+                const experienceText = getArtistExperienceText(artist) ?? getBrowseArtistExperienceText(artist.experience_years)
                 const bioText = getBrowseArtistBioText(artist)
 
                 return (

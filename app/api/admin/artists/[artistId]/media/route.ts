@@ -3,6 +3,7 @@ import { getAdminSession } from '@/lib/admin-access'
 import {
   ADMIN_MEDIA_MAX_SIZE_MB,
   buildAdminStoragePath,
+  getArtistMediaLimitError,
   getAdminFileTypeError,
   getSafeFileExtension,
 } from '@/lib/admin-file-upload'
@@ -62,6 +63,21 @@ export async function POST(
 
   if (!profile) {
     return NextResponse.json({ ok: false, error: 'Artist not found' }, { status: 404 })
+  }
+
+  const { data: existingMedia, error: existingMediaError } = await adminClient
+    .from('artist_media')
+    .select('id')
+    .eq('artist_id', artistId)
+
+  if (existingMediaError) {
+    console.error('[admin-media] existing media lookup failed:', existingMediaError)
+    return NextResponse.json({ ok: false, error: 'Unable to upload media' }, { status: 500 })
+  }
+
+  const limitError = getArtistMediaLimitError(existingMedia?.length ?? 0, 1)
+  if (limitError) {
+    return NextResponse.json({ ok: false, error: limitError }, { status: 400 })
   }
 
   const mediaType = fileValue.type.startsWith('video') ? 'video' : 'image'

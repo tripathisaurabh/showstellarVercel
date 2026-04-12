@@ -175,6 +175,22 @@ export function getArtistSummaryLine(artist: PublicArtistRecord) {
   return fallback
 }
 
+export function getArtistExperienceYears(artist: PublicArtistRecord) {
+  const raw = artist.experience_years
+  if (raw === null || raw === undefined) return null
+
+  const parsed = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(parsed) || parsed < 0) return null
+
+  return Math.floor(parsed)
+}
+
+export function getArtistExperienceText(artist: PublicArtistRecord) {
+  const experienceYears = getArtistExperienceYears(artist)
+  if (experienceYears === null) return null
+  return `${experienceYears} ${experienceYears === 1 ? 'year' : 'years'}`
+}
+
 export async function ensureUniqueArtistSlug(
   supabase: {
     from: (table: string) => {

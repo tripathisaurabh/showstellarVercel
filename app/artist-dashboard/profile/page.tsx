@@ -19,6 +19,11 @@ import {
 } from '@/lib/artist-profile'
 import { ARTIST_CATEGORY_OPTIONS } from '@/lib/artist-categories'
 import { createCroppedImageBlob, type ImageCropGeometry } from '@/lib/image-crop'
+import {
+  MAX_ARTIST_MEDIA_ITEMS,
+  getArtistMediaLimitError,
+  getSafeFileExtension as getMediaFileExtension,
+} from '@/lib/admin-file-upload'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,6 +62,7 @@ export default function ProfileEditorPage() {
   })
 
   const [rating, setRating] = useState<number | null>(null)
+  const mediaLimitReached = media.length >= MAX_ARTIST_MEDIA_ITEMS
 
   const getSupabase = () => createClient()
 
@@ -77,18 +83,6 @@ export default function ProfileEditorPage() {
   })
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
-
-  function getSafeFileExtension(file: File) {
-    const rawExt = file.name.split('.').pop()?.trim().toLowerCase()
-    if (rawExt && rawExt.length <= 5) return rawExt
-
-    if (file.type === 'image/jpeg') return 'jpg'
-    if (file.type === 'image/png') return 'png'
-    if (file.type === 'image/webp') return 'webp'
-    if (file.type === 'video/mp4') return 'mp4'
-
-    return 'bin'
-  }
 
   function createUploadId() {
     return typeof globalThis.crypto?.randomUUID === 'function'
@@ -244,7 +238,7 @@ export default function ProfileEditorPage() {
 
       setPhotoBusyState({ phase: 'uploading', message: 'Uploading profile photo...', progress: 72 })
       const supabase = getSupabase()
-      const originalExt = getSafeFileExtension(pendingPhotoFile)
+      const originalExt = getMediaFileExtension(pendingPhotoFile)
       const croppedPath = `dp/${profileId}/${timestamp}-${createUploadId()}.jpg`
       const originalPath = `dp-original/${profileId}/${timestamp}-${createUploadId()}.${originalExt}`
 
@@ -324,11 +318,17 @@ export default function ProfileEditorPage() {
       if (mediaFileRef.current) mediaFileRef.current.value = ''
       return
     }
+    const limitError = getArtistMediaLimitError(media.length, 1)
+    if (limitError) {
+      setError(limitError)
+      if (mediaFileRef.current) mediaFileRef.current.value = ''
+      return
+    }
     setUploadingMedia(true)
     setError('')
     try {
       const supabase = getSupabase()
-      const ext = getSafeFileExtension(file)
+      const ext = getMediaFileExtension(file)
       const path = `gallery/${profileId}/${Date.now()}.${ext}`
       const { error: uploadError } = await supabase.storage
         .from('artist-media')
@@ -589,7 +589,17 @@ export default function ProfileEditorPage() {
               <div className="relative rounded-2xl overflow-hidden aspect-[4/3] group">
                 {media[0].type === 'video'
                   ? <video src={media[0].media_url} className="w-full h-full object-cover" controls />
-                  : <Image src={media[0].media_url} alt="" fill className="object-cover" sizes="(max-width: 768px) 100vw, 33vw" />
+                  : (
+                    <a
+                      href={media[0].media_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label="Open gallery image in a new tab"
+                      className="block h-full w-full"
+                    >
+                      <Image src={media[0].media_url} alt="" fill className="object-cover" sizes="(max-width: 768px) 100vw, 33vw" />
+                    </a>
+                  )
                 }
                 <div className="absolute inset-0 bg-gradient-to-t from-[rgba(0,23,57,0.20)] to-transparent pointer-events-none" />
               </div>
@@ -598,7 +608,17 @@ export default function ProfileEditorPage() {
                   <div key={m.id} className="relative rounded-xl overflow-hidden aspect-square group">
                     {m.type === 'video'
                       ? <video src={m.media_url} className="w-full h-full object-cover" />
-                      : <Image src={m.media_url} alt="" fill className="object-cover" sizes="96px" />
+                      : (
+                        <a
+                          href={m.media_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label="Open gallery image in a new tab"
+                          className="block h-full w-full"
+                        >
+                          <Image src={m.media_url} alt="" fill className="object-cover" sizes="96px" />
+                        </a>
+                      )
                     }
                     <button
                       onClick={() => deleteMedia(m.id)}
@@ -626,7 +646,17 @@ export default function ProfileEditorPage() {
                 <div key={m.id} className="relative rounded-xl overflow-hidden aspect-square group">
                   {m.type === 'video'
                     ? <video src={m.media_url} className="w-full h-full object-cover" />
-                    : <Image src={m.media_url} alt="" fill className="object-cover" sizes="64px" />
+                    : (
+                      <a
+                        href={m.media_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label="Open gallery image in a new tab"
+                        className="block h-full w-full"
+                      >
+                        <Image src={m.media_url} alt="" fill className="object-cover" sizes="64px" />
+                      </a>
+                    )
                   }
                   <button
                     onClick={() => deleteMedia(m.id)}
@@ -650,15 +680,15 @@ export default function ProfileEditorPage() {
           <button
             type="button"
             onClick={() => mediaFileRef.current?.click()}
-            disabled={uploadingMedia}
+            disabled={uploadingMedia || mediaLimitReached}
             className="w-full py-8 rounded-xl text-sm font-medium border-2 border-dashed transition-colors disabled:opacity-50 flex flex-col items-center gap-2"
             style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
           >
             <Upload className="w-6 h-6" />
-            {uploadingMedia ? 'Uploading…' : 'Upload Photos / Videos'}
+            {uploadingMedia ? 'Uploading…' : mediaLimitReached ? 'Media limit reached' : 'Upload Photos / Videos'}
           </button>
           <p className="mt-3 text-xs leading-6" style={{ color: 'var(--muted)' }}>
-            Gallery uploads support JPG, PNG, WebP, GIF, MP4, WebM, and MOV files up to {MAX_MEDIA_SIZE_MB}MB.
+            Gallery uploads support JPG, PNG, WebP, GIF, MP4, WebM, and MOV files up to {MAX_MEDIA_SIZE_MB}MB. Up to {MAX_ARTIST_MEDIA_ITEMS} media items total.
           </p>
         </div>
 

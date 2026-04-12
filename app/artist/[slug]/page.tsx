@@ -7,11 +7,14 @@ import { createClient } from '@/lib/supabase/server'
 import { hasPublicSupabaseConfig } from '@/lib/supabase/config'
 import BookingModal from '@/components/DeferredBookingModal'
 import Footer from '@/components/Footer'
+import MediaGalleryLightbox from '@/components/MediaGalleryLightbox'
+import ShareArtistButton from '@/components/ShareArtistButton'
 import { ChevronRight, MapPin, Star } from 'lucide-react'
 import {
   getArtistCategories,
   getArtistDisplayName,
   getArtistInitials,
+  getArtistExperienceText,
   getArtistLocation,
   getArtistPublicPath,
   getArtistSummaryLine,
@@ -126,6 +129,7 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
     : null
   const rating        = artist.rating != null ? Number(artist.rating) : null
   const experienceYears = artist.experience_years != null ? Number(artist.experience_years) : null
+  const experienceText = getArtistExperienceText(artist)
   const hasDetails    = eventTypes.length > 0 || languages.length > 0 || !!location || !!artist.performance_style || experienceYears != null
   const hasMedia      = images.length > 0 || videos.length > 0
   const seoLandingPath = buildArtistSeoLandingPath(artist)
@@ -167,7 +171,7 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
 
         {/* ── Artist header (full width above the two-column split) ── */}
-        <div className="mb-8" style={{ ...CARD, padding: '32px' }}>
+        <div className="relative mb-8" style={{ ...CARD, padding: '32px' }}>
           <div className="flex flex-col sm:flex-row sm:items-start gap-6">
 
             {/* Avatar */}
@@ -199,99 +203,115 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
 
             {/* Name + meta */}
             <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-2 mb-3">
-                {categoryData.combined.slice(0, 3).map(category => (
-                  <span
-                    key={category}
-                    className="text-xs font-semibold px-3 py-1 rounded-full"
-                    style={{ background: 'rgba(193,117,245,0.14)', color: '#c175f5' }}
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    {categoryData.combined.slice(0, 3).map(category => (
+                      <span
+                        key={category}
+                        className="text-xs font-semibold px-3 py-1 rounded-full"
+                        style={{ background: 'var(--surface-2)', color: '#0A2148' }}
+                      >
+                        {category}
+                      </span>
+                    ))}
+                    {artist.is_featured && (
+                      <span
+                        className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full"
+                        style={{ background: 'var(--surface-2)', color: '#0A2148' }}
+                      >
+                        <Star className="w-3 h-3 fill-current" />
+                        Featured
+                      </span>
+                    )}
+                  </div>
+
+                  <h1
+                    className="font-extrabold leading-none mb-2"
+                    style={{
+                      color: 'var(--foreground)',
+                      fontSize: 'clamp(1.75rem, 4vw, 2.5rem)',
+                      letterSpacing: '-0.03em',
+                    }}
                   >
-                    {category}
-                  </span>
-                ))}
-                {artist.is_featured && (
-                  <span
-                    className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full"
-                    style={{ background: 'var(--surface-2)', color: 'var(--accent-violet)' }}
-                  >
-                    <Star className="w-3 h-3 fill-current" />
-                    Featured
-                  </span>
-                )}
-              </div>
+                    {displayName}
+                  </h1>
 
-              <h1
-                className="font-extrabold leading-none mb-2"
-                style={{
-                  color: 'var(--foreground)',
-                  fontSize: 'clamp(1.75rem, 4vw, 2.5rem)',
-                  letterSpacing: '-0.03em',
-                }}
-              >
-                {displayName}
-              </h1>
+                  {location && (
+                    <div className="flex items-center gap-1.5 mb-3" style={{ color: 'var(--muted)' }}>
+                      <MapPin className="w-4 h-4 shrink-0" />
+                      <span className="text-sm">{location}</span>
+                    </div>
+                  )}
 
-              {location && (
-                <div className="flex items-center gap-1.5 mb-3" style={{ color: 'var(--muted)' }}>
-                  <MapPin className="w-4 h-4 shrink-0" />
-                  <span className="text-sm">{location}</span>
-                </div>
-              )}
+                  {summaryLine && (
+                    <p className="text-sm leading-relaxed mb-4" style={{ color: 'var(--muted)', maxWidth: '560px' }}>
+                      {summaryLine}
+                    </p>
+                  )}
 
-              {summaryLine && (
-                <p className="text-sm leading-relaxed mb-4" style={{ color: 'var(--muted)', maxWidth: '560px' }}>
-                  {summaryLine}
-                </p>
-              )}
+                  {experienceText && (
+                    <div className="mb-4">
+                      <span className="inline-flex items-center gap-2 rounded-full bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--foreground)]">
+                        Experience: {experienceText}
+                      </span>
+                    </div>
+                  )}
 
-              {seoLandingPath && (
-                <div className="mb-4">
-                  <Link
-                    href={seoLandingPath}
-                    className="inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors hover:bg-[var(--surface-2)]"
-                    style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
-                  >
-                    Browse more {seoCategoryLabel} in {seoCityLabel}
-                  </Link>
-                </div>
-              )}
+                  {seoLandingPath && (
+                    <div className="mb-4">
+                      <Link
+                        href={seoLandingPath}
+                        className="inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors hover:bg-[var(--surface-2)]"
+                        style={{ borderColor: 'var(--border)', color: 'var(--foreground)' }}
+                      >
+                        Browse more {seoCategoryLabel} in {seoCityLabel}
+                      </Link>
+                    </div>
+                  )}
 
-              {categoryData.combined.length > 0 && (
-                <div className="mb-4 flex flex-wrap gap-2">
-                  {categoryData.combined.map(category => (
-                    <span
-                      key={category}
-                      className="text-xs font-medium px-3 py-1.5 rounded-full"
-                      style={{ background: 'var(--surface-2)', color: 'var(--foreground)' }}
-                    >
-                      {category}
+                  {categoryData.combined.length > 0 && (
+                    <div className="mb-4 flex flex-wrap gap-2">
+                      {categoryData.combined.map(category => (
+                        <span
+                          key={category}
+                          className="text-xs font-medium px-3 py-1.5 rounded-full"
+                          style={{ background: 'var(--surface-2)', color: 'var(--foreground)' }}
+                        >
+                          {category}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Trust badges */}
+                  <div className="flex flex-wrap gap-2">
+                    {rating !== null && (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full" style={{ background: 'rgba(193,117,245,0.16)', color: 'var(--foreground)' }}>
+                        <Star className="w-3 h-3 fill-current" />
+                        {rating.toFixed(1)} Rating
+                      </span>
+                    )}
+                    {experienceText && (
+                      <span className="text-xs font-medium px-3 py-1.5 rounded-full" style={{ background: 'var(--surface-2)', color: 'var(--accent)' }}>
+                        {experienceText} experience
+                      </span>
+                    )}
+                    <span className="text-xs font-medium px-3 py-1.5 rounded-full" style={{ background: 'var(--surface-2)', color: 'var(--foreground)' }}>
+                      ✓ Verified Artist
                     </span>
-                  ))}
+                    <span className="text-xs font-medium px-3 py-1.5 rounded-full" style={{ background: 'var(--surface-2)', color: 'var(--foreground)' }}>
+                      ⚡ Fast Response
+                    </span>
+                    <span className="text-xs font-medium px-3 py-1.5 rounded-full" style={{ background: 'var(--surface-2)', color: 'var(--foreground)' }}>
+                      🔒 Secure Booking
+                    </span>
+                  </div>
                 </div>
-              )}
 
-              {/* Trust badges */}
-              <div className="flex flex-wrap gap-2">
-                {rating !== null && (
-                  <span className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full" style={{ background: 'rgba(193,117,245,0.16)', color: 'var(--foreground)' }}>
-                    <Star className="w-3 h-3 fill-current" />
-                    {rating.toFixed(1)} Rating
-                  </span>
-                )}
-                {experienceYears !== null && experienceYears > 0 && (
-                  <span className="text-xs font-medium px-3 py-1.5 rounded-full" style={{ background: 'var(--surface-2)', color: 'var(--accent)' }}>
-                    {experienceYears} yrs experience
-                  </span>
-                )}
-                <span className="text-xs font-medium px-3 py-1.5 rounded-full" style={{ background: 'var(--surface-2)', color: 'var(--foreground)' }}>
-                  ✓ Verified Artist
-                </span>
-                <span className="text-xs font-medium px-3 py-1.5 rounded-full" style={{ background: 'var(--surface-2)', color: 'var(--foreground)' }}>
-                  ⚡ Fast Response
-                </span>
-                <span className="text-xs font-medium px-3 py-1.5 rounded-full" style={{ background: 'var(--surface-2)', color: 'var(--foreground)' }}>
-                  🔒 Secure Booking
-                </span>
+                <div className="absolute right-4 top-4 z-10 sm:static sm:ml-4 sm:flex-shrink-0">
+                  <ShareArtistButton title={displayName} url={artistProfileUrl} />
+                </div>
               </div>
             </div>
           </div>
@@ -373,47 +393,15 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
 
             {/* Media */}
             {hasMedia && (
-              <section style={{ ...CARD, contentVisibility: 'auto', containIntrinsicSize: '1px 560px' }}>
+              <section style={CARD}>
                 <div style={{ padding: '28px 32px' }}>
                   <h2 className="text-base font-semibold mb-5" style={{ color: 'var(--foreground)' }}>Photos & Videos</h2>
 
-                  {images.length > 0 && (
-                    <div
-                      className="grid gap-3 mb-6"
-                      style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}
-                    >
-                      {images.map((img, i) => (
-                        <div
-                          key={img.id}
-                          className="overflow-hidden relative"
-                          style={{ borderRadius: '10px', aspectRatio: '16/9' }}
-                        >
-                          <Image
-                            src={img.media_url}
-                            alt={`${displayName} — photo ${i + 1}`}
-                            fill
-                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 300px"
-                            className="object-cover transition-transform duration-300 hover:scale-105"
-                            loading="lazy"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {videos.length > 0 && (
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      {videos.map(vid => (
-                        <video
-                          key={vid.id}
-                          src={vid.media_url}
-                          controls
-                          preload="none"
-                          style={{ width: '100%', borderRadius: '10px', background: '#000' }}
-                        />
-                      ))}
-                    </div>
-                  )}
+                  <MediaGalleryLightbox
+                    displayName={displayName}
+                    images={images}
+                    videos={videos}
+                  />
                 </div>
               </section>
             )}

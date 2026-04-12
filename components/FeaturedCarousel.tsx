@@ -15,7 +15,7 @@ export type FeaturedArtistSlot = {
   pricingStart: number | null
   bio: string | null
   isFeatured: boolean
-  experienceYears: number | null
+  experienceYears: number | string | null
 }
 
 const GAP_PX = 20 // matches gap-5
@@ -58,10 +58,12 @@ function getFeaturedLocationText(value?: string | null) {
   return location || FALLBACK_LOCATION
 }
 
-function getFeaturedExperienceText(value: number | null) {
-  if (value === null || Number.isNaN(value)) return FALLBACK_EXPERIENCE
-  const years = Math.max(0, value)
-  return `${years} ${years === 1 ? 'year' : 'years'}`
+function getFeaturedExperienceText(value: number | string | null) {
+  if (value === null || value === undefined || value === '') return FALLBACK_EXPERIENCE
+  const years = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(years) || years < 0) return FALLBACK_EXPERIENCE
+  const normalized = Math.floor(years)
+  return `${normalized} ${normalized === 1 ? 'year' : 'years'}`
 }
 
 function getFeaturedBioText(value?: string | null) {

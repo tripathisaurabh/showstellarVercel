@@ -1,5 +1,7 @@
 export const ADMIN_PROFILE_IMAGE_MAX_SIZE_MB = 5
 export const ADMIN_MEDIA_MAX_SIZE_MB = 50
+export const MAX_ARTIST_MEDIA_ITEMS = 12
+export const MAX_MEDIA_FILES_PER_BATCH = 6
 
 export const ADMIN_ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 export const ADMIN_ALLOWED_MEDIA_MIME_TYPES = new Set([
@@ -54,6 +56,24 @@ export function getAdminFileTypeError(file: FileLike, kind: 'image' | 'media') {
   const maxSize = kind === 'image' ? ADMIN_PROFILE_IMAGE_MAX_SIZE_MB : ADMIN_MEDIA_MAX_SIZE_MB
   if (file.size > maxSize * 1024 * 1024) {
     return `File must be ${maxSize}MB or smaller.`
+  }
+
+  return null
+}
+
+export function getArtistMediaLimitError(existingCount: number, incomingCount: number) {
+  if (incomingCount <= 0) return null
+
+  if (incomingCount > MAX_MEDIA_FILES_PER_BATCH) {
+    return `Upload up to ${MAX_MEDIA_FILES_PER_BATCH} files at once.`
+  }
+
+  if (existingCount >= MAX_ARTIST_MEDIA_ITEMS) {
+    return `This artist profile already has the maximum of ${MAX_ARTIST_MEDIA_ITEMS} media items.`
+  }
+
+  if (existingCount + incomingCount > MAX_ARTIST_MEDIA_ITEMS) {
+    return `You can upload up to ${MAX_ARTIST_MEDIA_ITEMS} media items in total.`
   }
 
   return null

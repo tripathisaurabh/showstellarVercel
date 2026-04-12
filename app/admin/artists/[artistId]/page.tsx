@@ -5,6 +5,7 @@ import { ArrowLeft, CalendarDays, Edit3, Mail, Phone, Star, Users } from 'lucide
 import type { LucideIcon } from 'lucide-react'
 import AdminArtistActions from '@/components/AdminArtistActions'
 import BrandLogo from '@/components/BrandLogo'
+import MediaGalleryLightbox from '@/components/MediaGalleryLightbox'
 import { getAdminSession } from '@/lib/admin-access'
 import { loadAdminArtistDetail } from '@/lib/admin-dashboard'
 
@@ -215,27 +216,23 @@ export default async function AdminArtistDetailPage({
               No gallery items uploaded.
             </p>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-              {artist.media.map(item => (
-                <div
-                  key={item.id}
-                  className="rounded-2xl overflow-hidden border"
-                  style={{ borderColor: 'var(--border)' }}
-                >
-                  {item.type === 'video' ? (
-                    <video className="h-40 w-full object-cover bg-black" controls src={item.media_url} />
-                  ) : (
-                    <Image
-                      src={item.media_url}
-                      alt={artist.displayName}
-                      width={320}
-                      height={240}
-                      className="h-40 w-full object-cover"
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
+            <MediaGalleryLightbox
+              displayName={artist.displayName}
+              images={artist.media
+                .filter(item => item.type === 'image')
+                .map(item => ({
+                  id: item.id,
+                  media_url: item.media_url,
+                  type: 'image' as const,
+                }))}
+              videos={artist.media
+                .filter(item => item.type === 'video')
+                .map(item => ({
+                  id: item.id,
+                  media_url: item.media_url,
+                  type: 'video' as const,
+                }))}
+            />
           )}
         </section>
 
