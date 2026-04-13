@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import EmailCenterShell from '@/components/email-center/EmailCenterShell'
 import { getAdminSession } from '@/lib/admin-access'
+import { loadAdminArtistDetail } from '@/lib/admin-dashboard'
+import type { AdminArtistDetailData } from '@/lib/admin-dashboard'
 
 export const metadata: Metadata = {
   title: 'Email Center',
@@ -11,7 +13,17 @@ export const metadata: Metadata = {
 
 export const dynamic = 'force-dynamic'
 
-export default async function EmailCenterPage() {
+type EmailCenterSearchParams = {
+  artistId?: string
+  template?: string
+}
+
+export default async function EmailCenterPage({
+  searchParams,
+}: {
+  searchParams?: Promise<EmailCenterSearchParams>
+}) {
+  const params = (await searchParams) ?? {}
   const { user, isAdmin, adminClient, userRecord } = await getAdminSession()
 
   // Proxy already protects /admin/* routes. Keep a server-side guard here as defense in depth.
@@ -23,5 +35,18 @@ export default async function EmailCenterPage() {
     redirect('/admin/login?reason=not-admin')
   }
 
-  return <EmailCenterShell adminEmail={userRecord?.email ?? user.email ?? ''} />
+  let selectedArtist: AdminArtistDetailData['artist'] | null = null
+
+  if (params.artistId) {
+    const artistData = await loadAdminArtistDetail(params.artistId)
+    selectedArtist = artistData?.artist ?? null
+  }
+
+  return (
+    <EmailCenterShell
+      adminEmail={userRecord?.email ?? user.email ?? ''}
+      selectedArtist={selectedArtist}
+      initialTemplateKey={params.template?.trim() || undefined}
+    />
+  )
 }

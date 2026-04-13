@@ -25,6 +25,9 @@ export type EmailTemplateDefinition = {
 }
 
 export type EmailCenterPayload = {
+  artistId?: string
+  artistName?: string
+  artistEmail?: string
   to: string
   subject: string
   templateKey: string
@@ -43,6 +46,8 @@ export type EmailCenterValidationResult = {
 export type EmailCenterSendLog = {
   action: 'attempt' | 'success' | 'failure'
   templateKey: string
+  artistId?: string | null
+  artistName?: string | null
   subject: string
   to: string
   requestedBy: string | null

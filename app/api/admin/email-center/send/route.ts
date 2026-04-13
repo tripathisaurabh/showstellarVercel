@@ -9,6 +9,7 @@ import {
 } from '@/lib/email-center/utils'
 import type { EmailCenterPayload } from '@/lib/email-center/types'
 import { getEmailFromAddress, getResendClient } from '@/lib/resend'
+import { recordArtistCommunicationEvent } from '@/lib/email/artist-communication'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,6 +38,9 @@ export async function POST(request: Request) {
             )
           : {},
       sendTest: Boolean(rawPayload?.sendTest),
+      artistId: typeof rawPayload?.artistId === 'string' ? rawPayload.artistId : '',
+      artistName: typeof rawPayload?.artistName === 'string' ? rawPayload.artistName : '',
+      artistEmail: typeof rawPayload?.artistEmail === 'string' ? rawPayload.artistEmail : '',
     }
   } catch {
     return NextResponse.json({ success: false, error: 'Invalid JSON payload' }, { status: 400 })
@@ -79,6 +83,8 @@ export async function POST(request: Request) {
   logEmailCenterSend({
     action: 'attempt',
     templateKey: template.key,
+    artistId: payload.artistId ?? null,
+    artistName: payload.artistName ?? null,
     subject: validation.sanitizedSubject,
     to: resolvedRecipient,
     requestedBy: user.email ?? null,
@@ -98,11 +104,27 @@ export async function POST(request: Request) {
       logEmailCenterSend({
         action: 'failure',
         templateKey: template.key,
+        artistId: payload.artistId ?? null,
+        artistName: payload.artistName ?? null,
         subject: validation.sanitizedSubject,
         to: resolvedRecipient,
         requestedBy: user.email ?? null,
         sendTest: Boolean(payload.sendTest),
         error: response.error.message,
+      })
+
+      await recordArtistCommunicationEvent({
+        artistId: payload.artistId || null,
+        artistUserId: null,
+        eventName: 'manual_admin_send',
+        templateKey: template.key,
+        channel: 'email',
+        recipientEmail: resolvedRecipient,
+        subject: validation.sanitizedSubject,
+        status: 'failure',
+        error: response.error.message,
+        payload: { ...validation.sanitizedTemplateData, artistName: payload.artistName ?? '', artistEmail: payload.artistEmail ?? '' },
+        actorUserId: user.id,
       })
 
       return NextResponse.json(
@@ -114,11 +136,27 @@ export async function POST(request: Request) {
     logEmailCenterSend({
       action: 'success',
       templateKey: template.key,
+      artistId: payload.artistId ?? null,
+      artistName: payload.artistName ?? null,
       subject: validation.sanitizedSubject,
       to: resolvedRecipient,
       requestedBy: user.email ?? null,
       sendTest: Boolean(payload.sendTest),
       messageId: response.data?.id,
+    })
+
+    await recordArtistCommunicationEvent({
+      artistId: payload.artistId || null,
+      artistUserId: null,
+      eventName: 'manual_admin_send',
+      templateKey: template.key,
+      channel: 'email',
+      recipientEmail: resolvedRecipient,
+      subject: validation.sanitizedSubject,
+      status: 'success',
+      messageId: response.data?.id,
+      payload: { ...validation.sanitizedTemplateData, artistName: payload.artistName ?? '', artistEmail: payload.artistEmail ?? '' },
+      actorUserId: user.id,
     })
 
     return NextResponse.json({
@@ -131,11 +169,27 @@ export async function POST(request: Request) {
     logEmailCenterSend({
       action: 'failure',
       templateKey: template.key,
+      artistId: payload.artistId ?? null,
+      artistName: payload.artistName ?? null,
       subject: validation.sanitizedSubject,
       to: resolvedRecipient,
       requestedBy: user.email ?? null,
       sendTest: Boolean(payload.sendTest),
       error: message,
+    })
+
+    await recordArtistCommunicationEvent({
+      artistId: payload.artistId || null,
+      artistUserId: null,
+      eventName: 'manual_admin_send',
+      templateKey: template.key,
+      channel: 'email',
+      recipientEmail: resolvedRecipient,
+      subject: validation.sanitizedSubject,
+      status: 'failure',
+      error: message,
+      payload: { ...validation.sanitizedTemplateData, artistName: payload.artistName ?? '', artistEmail: payload.artistEmail ?? '' },
+      actorUserId: user.id,
     })
 
     return NextResponse.json({ success: false, error: message }, { status: 500 })

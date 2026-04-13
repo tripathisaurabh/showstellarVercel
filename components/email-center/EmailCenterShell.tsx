@@ -12,18 +12,30 @@ import {
   mergeTemplateDataForTemplateChange,
 } from '@/lib/email-center/utils'
 import type { EmailTemplateData } from '@/lib/email-center/types'
+import { buildArtistEmailCenterSeed } from '@/lib/email/artist-communication'
+import type { AdminArtistDetailData } from '@/lib/admin-dashboard'
 
 type EmailCenterShellProps = {
   adminEmail: string
+  selectedArtist?: AdminArtistDetailData['artist'] | null
+  initialTemplateKey?: string
 }
 
 const DEFAULT_TEMPLATE = emailTemplates[0]
 
-export default function EmailCenterShell({ adminEmail }: EmailCenterShellProps) {
-  const [selectedTemplateKey, setSelectedTemplateKey] = useState(DEFAULT_TEMPLATE.key)
-  const [to, setTo] = useState('')
-  const [subject, setSubject] = useState(DEFAULT_TEMPLATE.defaultSubject)
-  const [templateData, setTemplateData] = useState<EmailTemplateData>(() => getInitialTemplateData(DEFAULT_TEMPLATE))
+export default function EmailCenterShell({
+  adminEmail,
+  selectedArtist = null,
+  initialTemplateKey,
+}: EmailCenterShellProps) {
+  const resolvedDefaultTemplate =
+    getEmailTemplateByKey(initialTemplateKey ?? '') ?? DEFAULT_TEMPLATE
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState(resolvedDefaultTemplate.key)
+  const [to, setTo] = useState(selectedArtist?.email ?? '')
+  const [subject, setSubject] = useState(resolvedDefaultTemplate.defaultSubject)
+  const [templateData, setTemplateData] = useState<EmailTemplateData>(() =>
+    selectedArtist ? buildArtistEmailCenterSeed(selectedArtist) : getInitialTemplateData(resolvedDefaultTemplate)
+  )
   const [userEditedSubject, setUserEditedSubject] = useState(false)
   const [statusTone, setStatusTone] = useState<'idle' | 'sending' | 'success' | 'error'>('idle')
   const [statusMessage, setStatusMessage] = useState<string | null>('Ready to compose a manual ShowStellar email.')
@@ -87,8 +99,13 @@ export default function EmailCenterShell({ adminEmail }: EmailCenterShellProps) 
 
   function handleLoadSampleData() {
     startTransition(() => {
-      setTo('rahul@example.com')
-      setTemplateData(getSampleTemplateData(selectedTemplate))
+      if (selectedArtist) {
+        setTo(selectedArtist.email || '')
+        setTemplateData(buildArtistEmailCenterSeed(selectedArtist))
+      } else {
+        setTo('rahul@example.com')
+        setTemplateData(getSampleTemplateData(selectedTemplate))
+      }
       setStatusTone('idle')
       setStatusMessage('Loaded sample content for quick preview testing.')
 
@@ -112,6 +129,9 @@ export default function EmailCenterShell({ adminEmail }: EmailCenterShellProps) 
         templateKey: selectedTemplate.key,
         templateData,
         sendTest,
+        artistId: selectedArtist?.id ?? '',
+        artistName: selectedArtist?.displayName ?? templateData.artistName ?? templateData.artist_name ?? '',
+        artistEmail: selectedArtist?.email ?? templateData.artist_email ?? '',
       }),
     })
 
@@ -162,6 +182,15 @@ export default function EmailCenterShell({ adminEmail }: EmailCenterShellProps) 
               <p className="mt-2 max-w-2xl text-sm leading-7 sm:text-base" style={{ color: 'var(--muted)' }}>
                 Manually send branded ShowStellar emails to artists.
               </p>
+              {selectedArtist ? (
+                <div
+                  className="mt-4 inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm"
+                  style={{ borderColor: 'rgba(0, 23, 57, 0.10)', background: 'rgba(0, 23, 57, 0.03)', color: 'var(--foreground)' }}
+                >
+                  <Sparkles className="h-4 w-4" style={{ color: 'var(--navy)' }} />
+                  Selected artist: <strong>{selectedArtist.displayName}</strong>
+                </div>
+              ) : null}
             </div>
 
             <div
@@ -194,12 +223,13 @@ export default function EmailCenterShell({ adminEmail }: EmailCenterShellProps) 
             selectedTemplateKey={selectedTemplateKey}
             to={to}
             subject={subject}
-            artistName={templateData.artistName ?? ''}
+            artistName={(templateData.artistName ?? templateData.artist_name ?? selectedArtist?.displayName ?? '').trim()}
             templateData={templateData}
             disabled={isPending}
             adminEmail={adminEmail}
             statusTone={statusTone}
             statusMessage={statusMessage}
+            selectedArtistId={selectedArtist?.id ?? ''}
             onTemplateChange={handleTemplateChange}
             onToChange={value => {
               setTo(value)

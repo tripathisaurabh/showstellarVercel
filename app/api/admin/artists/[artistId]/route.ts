@@ -8,6 +8,12 @@ import {
   normalizeArtistCategorySelection,
   splitCategoryInput,
 } from '@/lib/artist-categories'
+import {
+  buildArtistLifecycleEmailPayload,
+  sendArtistCommunicationEmail,
+} from '@/lib/email/artist-communication'
+import { loadAdminArtistDetail } from '@/lib/admin-dashboard'
+import { getSiteUrl } from '@/lib/seo'
 
 type UpdateBody = {
   fullName?: string
@@ -60,11 +66,11 @@ export async function PATCH(
   const { data: profile, error: profileError } = await (adminClient.from('artist_profiles') as unknown as {
     select(columns: string): {
       eq(column: string, value: string): {
-        maybeSingle(): Promise<{ data: { id: string; user_id: string | null } | null; error: { message?: string } | null }>
+        maybeSingle(): Promise<{ data: { id: string; user_id: string | null; approval_status?: string | null } | null; error: { message?: string } | null }>
       }
     }
   })
-    .select('id, user_id')
+    .select('id, user_id, approval_status')
     .eq('id', artistId)
     .maybeSingle()
 
@@ -308,6 +314,54 @@ export async function PATCH(
     if (userUpdateError) {
       console.error('[admin] user update failed:', userUpdateError)
       return NextResponse.json({ ok: false, error: 'Failed to update artist' }, { status: 500 })
+    }
+  }
+
+  const previousApprovalStatus = profile.approval_status ?? null
+  const nextApprovalStatus = body.approvalStatus ?? previousApprovalStatus
+  const lifecycleEvent =
+    body.approvalStatus && body.approvalStatus !== previousApprovalStatus
+      ? body.approvalStatus === 'pending'
+        ? ('profile_under_review' as const)
+        : body.approvalStatus === 'rejected'
+          ? ('needs_changes' as const)
+          : body.approvalStatus === 'approved'
+            ? ('approved' as const)
+            : null
+      : null
+
+  if (lifecycleEvent) {
+    try {
+      const updatedData = await loadAdminArtistDetail(artistId)
+      const artist = updatedData?.artist
+
+      if (artist?.email) {
+        const siteUrl = getSiteUrl()
+        const payload = buildArtistLifecycleEmailPayload({
+          artistName: artist.displayName,
+          artistEmail: artist.email,
+          loginEmail: artist.email,
+          dashboardLink: new URL('/artist-dashboard', siteUrl).toString(),
+          profileLink: new URL(artist.publicProfilePath, siteUrl).toString(),
+          verificationLink: new URL('/verify-email', siteUrl).toString(),
+          missingFields: [],
+          supportEmail: 'support@showstellar.com',
+          status: nextApprovalStatus ?? body.approvalStatus ?? '',
+          city: artist.city || '',
+          category: artist.categorySummary || artist.categoryName || '',
+        })
+
+        await sendArtistCommunicationEmail({
+          eventName: lifecycleEvent,
+          artistId: artist.id,
+          artistUserId: profile.user_id,
+          recipientEmail: artist.email,
+          payload,
+          actorUserId: user.id,
+        })
+      }
+    } catch (error) {
+      console.warn('[admin] lifecycle email skipped:', error)
     }
   }
 

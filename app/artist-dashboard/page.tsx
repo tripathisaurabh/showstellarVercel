@@ -8,6 +8,11 @@ import ArtistContactInformationSection from '@/components/ArtistContactInformati
 import { getArtistDisplayName, getArtistPublicPath, getArtistCategories, getArtistPreferredWorkingLocationsText } from '@/lib/artist-profile'
 import type { PublicArtistRecord } from '@/lib/artist-profile'
 import { isMissingEmailChangeRequestsTableError } from '@/lib/contact-info'
+import {
+  buildArtistLifecycleEmailPayload,
+  sendArtistCommunicationEmail,
+} from '@/lib/email/artist-communication'
+import { getSiteUrl } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
 
@@ -170,7 +175,15 @@ export default async function ArtistDashboard() {
               </div>
             </div>
             {status === 'draft' && profile?.id && (
-              <SubmitForReviewButton artistId={profile?.id} />
+              <SubmitForReviewButton
+                artistId={profile.id}
+                artistName={artistName}
+                artistEmail={userRecord?.email ?? profile?.users?.email ?? user.email ?? ''}
+                profileLink={publicProfilePath || `/artist/${profile.id}`}
+                category={profile ? getArtistCategories(profile).summary : ''}
+                city={profile?.city ?? ''}
+                actorUserId={user.id}
+              />
             )}
           </div>
         </div>
@@ -322,17 +335,61 @@ function displayOptionalPrice(value: string, fallback: string) {
   return trimmed && trimmed !== '—' ? trimmed : fallback
 }
 
-function SubmitForReviewButton({ artistId }: { artistId?: string }) {
+function SubmitForReviewButton({
+  artistId,
+  artistName,
+  artistEmail,
+  profileLink,
+  category,
+  city,
+  actorUserId,
+}: {
+  artistId?: string
+  artistName: string
+  artistEmail: string
+  profileLink: string
+  category: string
+  city: string
+  actorUserId: string
+}) {
   return (
     <form action={async () => {
       'use server'
-      if (!artistId) return
+      if (!artistId || !artistEmail) return
       const { createClient } = await import('@/lib/supabase/server')
       const supabase = await createClient()
       await supabase
         .from('artist_profiles')
         .update({ approval_status: 'pending' })
         .eq('id', artistId)
+
+      try {
+        const siteUrl = getSiteUrl()
+        const payload = buildArtistLifecycleEmailPayload({
+          artistName,
+          artistEmail,
+          loginEmail: artistEmail,
+          dashboardLink: new URL('/artist-dashboard', siteUrl).toString(),
+          profileLink: new URL(profileLink, siteUrl).toString(),
+          verificationLink: new URL('/verify-email', siteUrl).toString(),
+          missingFields: [],
+          supportEmail: 'support@showstellar.com',
+          status: 'submitted_for_review',
+          city,
+          category,
+        })
+
+        await sendArtistCommunicationEmail({
+          eventName: 'submitted_for_review',
+          artistId,
+          artistUserId: actorUserId,
+          recipientEmail: artistEmail,
+          payload,
+          actorUserId,
+        })
+      } catch (error) {
+        console.error('[artist-dashboard] submission email failed:', error)
+      }
     }}>
       <button
         type="submit"

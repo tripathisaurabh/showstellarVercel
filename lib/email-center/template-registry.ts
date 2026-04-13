@@ -2,6 +2,7 @@ import { artistAccountCreatedTemplate } from '@/emails/templates/artist-account-
 import { completeProfileTemplate } from '@/emails/templates/complete-profile'
 import { passwordResetTemplate } from '@/emails/templates/password-reset'
 import { profileApprovedTemplate } from '@/emails/templates/profile-approved'
+import { artistLifecycleEmailTemplateDefinitions } from '@/lib/email/templates/artist'
 import type { EmailTemplateDefinition } from '@/lib/email-center/types'
 
 export const emailTemplates: EmailTemplateDefinition[] = [
@@ -9,6 +10,7 @@ export const emailTemplates: EmailTemplateDefinition[] = [
   profileApprovedTemplate,
   completeProfileTemplate,
   passwordResetTemplate,
+  ...artistLifecycleEmailTemplateDefinitions,
 ]
 
 export const emailTemplateRegistry = Object.fromEntries(

@@ -8,6 +8,7 @@ type EmailFormProps = {
   to: string
   subject: string
   artistName: string
+  selectedArtistId?: string
   templateData: EmailTemplateData
   disabled: boolean
   adminEmail: string
@@ -29,6 +30,7 @@ export default function EmailForm({
   to,
   subject,
   artistName,
+  selectedArtistId,
   templateData,
   disabled,
   adminEmail,
@@ -57,6 +59,20 @@ export default function EmailForm({
             Choose the email type, review the purpose, then enter the target artist details.
           </p>
         </div>
+
+        {artistName ? (
+          <div
+            className="mb-4 rounded-2xl border px-4 py-3 text-sm"
+            style={{
+              borderColor: 'rgba(0, 23, 57, 0.10)',
+              background: 'rgba(0, 23, 57, 0.03)',
+              color: 'var(--foreground)',
+            }}
+          >
+            <span className="font-semibold">Selected artist:</span> {artistName}
+            {selectedArtistId ? <span className="ml-2 text-xs" style={{ color: 'var(--muted)' }}>({selectedArtistId})</span> : null}
+          </div>
+        ) : null}
 
         <div className="grid gap-4">
           <label className="block">

@@ -1,10 +1,34 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { buildBrandedEmailTemplate } from '@/lib/email-template'
 import { getSiteUrl } from '@/lib/seo'
 import { getAdminSupabaseClient } from '@/lib/supabase/admin'
 import { rateLimitRequest } from '@/lib/rate-limit'
-import { sendEmailIfConfigured } from '@/utils/email'
+import {
+  buildArtistLifecycleEmailPayload,
+  sendArtistCommunicationEmail,
+} from '@/lib/email/artist-communication'
+
+type ArtistProfileRow = {
+  id: string
+  slug: string | null
+  stage_name: string | null
+  locality: string | null
+  city: string | null
+  state: string | null
+  preferred_working_locations: string | null
+  bio: string | null
+  performance_style: string | null
+  event_types: string | null
+  languages_spoken: string | null
+  pricing_start: string | number | null
+  profile_image: string | null
+  profile_image_cropped: string | null
+  profile_image_original: string | null
+  approval_status: string | null
+  categories: string[] | null
+  custom_categories: string[] | null
+  primary_category: { name: string | null } | Array<{ name: string | null }> | null
+}
 
 export async function POST(request: Request) {
   const rateLimit = await rateLimitRequest(request, 'resend-verification', 3, 300_000)
@@ -36,6 +60,21 @@ export async function POST(request: Request) {
 
   const siteUrl = getSiteUrl()
   const admin = getAdminSupabaseClient()
+  const { data: userRow } = await supabase
+    .from('users')
+    .select('id, full_name, phone_number, email')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  const { data: profileRow } = await supabase
+    .from('artist_profiles')
+    .select('id, slug, stage_name, locality, city, state, preferred_working_locations, bio, performance_style, event_types, languages_spoken, pricing_start, profile_image, profile_image_cropped, profile_image_original, approval_status, categories, custom_categories, primary_category:categories(name)')
+    .eq('user_id', user.id)
+    .maybeSingle() as unknown as { data: ArtistProfileRow | null }
+
+  const primaryCategoryName = Array.isArray(profileRow?.primary_category)
+    ? profileRow.primary_category[0]?.name ?? ''
+    : profileRow?.primary_category?.name ?? ''
 
   try {
     const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
@@ -49,13 +88,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unable to generate verification link' }, { status: 500 })
     }
 
-    const emailResult = await sendEmailIfConfigured({
-      to: user.email,
-      subject: 'Verify your ShowStellar email',
-      html: buildVerificationEmail({ verifyUrl: linkData.properties.action_link, siteUrl }),
+    const payload = buildArtistLifecycleEmailPayload({
+      artistName: profileRow?.stage_name ?? userRow?.full_name ?? user.email,
+      artistEmail: user.email,
+      loginEmail: user.email,
+      dashboardLink: `${siteUrl}/artist-dashboard`,
+      profileLink: profileRow?.slug ? `${siteUrl}/artist/${profileRow.slug}` : `${siteUrl}/artist-dashboard/profile`,
+      verificationLink: linkData.properties.action_link,
+      missingFields: [],
+      supportEmail: 'support@showstellar.com',
+      city: profileRow?.city ?? '',
+      category: primaryCategoryName,
+      status: profileRow?.approval_status ?? 'verification_pending',
     })
 
-    if (!emailResult.skipped && 'error' in emailResult) {
+    const emailResult = await sendArtistCommunicationEmail({
+      eventName: 'verification_pending',
+      artistId: profileRow?.id ?? null,
+      artistUserId: user.id,
+      recipientEmail: user.email,
+      payload,
+      actorUserId: user.id,
+    })
+
+    if (!emailResult.ok && !emailResult.skipped) {
       return NextResponse.json({ error: 'Failed to send verification email' }, { status: 500 })
     }
   } catch (err) {
@@ -64,16 +120,4 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ ok: true })
-}
-
-function buildVerificationEmail({ verifyUrl, siteUrl }: { verifyUrl: string; siteUrl: string }) {
-  return buildBrandedEmailTemplate({
-    siteUrl,
-    title: 'Verify your email',
-    body: 'Click the button below to verify your email and activate your ShowStellar artist account.',
-    buttonText: 'Verify Email',
-    buttonHref: verifyUrl,
-    footerText: 'If you did not request this email, you can safely ignore it.',
-    mascotPath: '/illustrations/feedback/verification-star.svg',
-  })
 }

@@ -5,11 +5,13 @@ import {
   partitionArtistCategories,
   splitCategoryInput,
 } from '@/lib/artist-categories'
-import { buildBrandedEmailTemplate } from '@/lib/email-template'
+import {
+  buildArtistLifecycleEmailPayload,
+  sendArtistCommunicationEmail,
+} from '@/lib/email/artist-communication'
 import { getSiteUrl } from '@/lib/seo'
 import { getAdminSupabaseClient } from '@/lib/supabase/admin'
 import { rateLimitRequest } from '@/lib/rate-limit'
-import { sendEmailIfConfigured } from '@/utils/email'
 
 type SignupBody = {
   full_name?: string
@@ -201,10 +203,27 @@ export async function POST(request: Request) {
     }
 
     if (actionLink) {
-      await sendEmailIfConfigured({
-        to: email,
-        subject: 'Verify your ShowStellar email',
-        html: buildVerificationEmail({ name: fullName, verifyUrl: actionLink, siteUrl }),
+      const verificationPayload = buildArtistLifecycleEmailPayload({
+        artistName: fullName,
+        artistEmail: email,
+        loginEmail: email,
+        dashboardLink: `${siteUrl}/artist-dashboard`,
+        profileLink: `${siteUrl}/artist-dashboard/profile`,
+        verificationLink: actionLink,
+        missingFields: [],
+        supportEmail: 'support@showstellar.com',
+        status: 'verification_pending',
+        city,
+        category: categories[0] ?? customCategories[0] ?? '',
+      })
+
+      await sendArtistCommunicationEmail({
+        eventName: 'verification_pending',
+        artistId: null,
+        artistUserId: authData.user.id,
+        recipientEmail: email,
+        payload: verificationPayload,
+        actorUserId: authData.user.id,
       })
     } else {
       console.error('[artist-signup] verification link generation failed:', linkResult.error)
@@ -214,17 +233,4 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ ok: true })
-}
-
-function buildVerificationEmail({ name, verifyUrl, siteUrl }: { name: string; verifyUrl: string; siteUrl: string }) {
-  return buildBrandedEmailTemplate({
-    siteUrl,
-    title: 'Verify your email',
-    intro: `Hi ${name},`,
-    body: 'Welcome to ShowStellar.\nPlease confirm your email to activate your artist profile.',
-    buttonText: 'Verify Email',
-    buttonHref: verifyUrl,
-    footerText: 'If you did not create an account, you can safely ignore this email.',
-    mascotPath: '/illustrations/feedback/verification-star.svg',
-  })
 }
