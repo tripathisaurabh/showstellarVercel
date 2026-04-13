@@ -16,6 +16,7 @@ import {
   getArtistInitials,
   getArtistExperienceText,
   getArtistLocation,
+  getArtistPreferredWorkingLocationsText,
   getArtistPublicPath,
   getArtistSummaryLine,
   splitArtistTextList,
@@ -124,13 +125,14 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
   const languages     = splitArtistTextList(artist.languages_spoken)
   const bioParagraphs = splitArtistParagraphs(artist.bio)
   const summaryLine   = getArtistSummaryLine(artist)
+  const preferredWorkingLocations = getArtistPreferredWorkingLocationsText(artist)
   const priceDisplay = artist.pricing_start != null
     ? `₹${Number(artist.pricing_start).toLocaleString()}`
     : null
   const rating        = artist.rating != null ? Number(artist.rating) : null
   const experienceYears = artist.experience_years != null ? Number(artist.experience_years) : null
   const experienceText = getArtistExperienceText(artist)
-  const hasDetails    = eventTypes.length > 0 || languages.length > 0 || !!location || !!artist.performance_style || experienceYears != null
+  const hasDetails    = eventTypes.length > 0 || languages.length > 0 || !!location || !!preferredWorkingLocations || !!artist.performance_style || experienceYears != null
   const hasMedia      = images.length > 0 || videos.length > 0
   const seoLandingPath = buildArtistSeoLandingPath(artist)
   const seoCategoryLabel = resolveSeoCategoryDefinition(getArtistSeoCategorySlug(artist))?.pluralLabel ?? `${getArtistSeoCategoryLabel(artist)}s`
@@ -244,6 +246,12 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
                     </div>
                   )}
 
+                  {preferredWorkingLocations && (
+                    <p className="text-sm leading-relaxed mb-3" style={{ color: 'var(--muted)', maxWidth: '560px' }}>
+                      <span className="font-medium text-[var(--foreground)]">Preferred working locations:</span> {preferredWorkingLocations}
+                    </p>
+                  )}
+
                   {summaryLine && (
                     <p className="text-sm leading-relaxed mb-4" style={{ color: 'var(--muted)', maxWidth: '560px' }}>
                       {summaryLine}
@@ -353,6 +361,7 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
                       eventTypes.length > 0    ? ['Event types',  eventTypes.join(', ')]                         : null,
                       languages.length > 0     ? ['Languages',    languages.join(', ')]                           : null,
                       location                 ? ['Based in',     location]                                       : null,
+                      preferredWorkingLocations ? ['Preferred working locations', preferredWorkingLocations]      : null,
                       artist.performance_style ? ['Style',        artist.performance_style]                       : null,
                       experienceYears != null  ? ['Experience',   `${experienceYears} ${experienceYears === 1 ? 'year' : 'years'}`] : null,
                     ] as ([string, string] | null)[])

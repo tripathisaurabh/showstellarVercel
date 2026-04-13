@@ -73,6 +73,7 @@ export default function ProfileEditorPage() {
     locality: '',
     city: '',
     state: '',
+    preferred_working_locations: '',
     performance_style: '',
     event_types: '',
     languages_spoken: '',
@@ -144,6 +145,7 @@ export default function ProfileEditorPage() {
           locality: profile.locality ?? '',
           city: profile.city ?? '',
           state: profile.state ?? '',
+          preferred_working_locations: profile.preferred_working_locations ?? '',
           performance_style: profile.performance_style ?? '',
           event_types: profile.event_types ?? '',
           languages_spoken: profile.languages_spoken ?? '',
@@ -495,6 +497,19 @@ export default function ProfileEditorPage() {
                   <Input value={form.state} onChange={v => set('state', v)} placeholder="e.g. Maharashtra" />
                 </Field>
               </div>
+              <Field label="Preferred Working Locations">
+                <textarea
+                  value={form.preferred_working_locations}
+                  onChange={e => set('preferred_working_locations', e.target.value)}
+                  placeholder="e.g. Mumbai, Navi Mumbai, Thane"
+                  rows={3}
+                  className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none focus:ring-2 focus:ring-[var(--accent-violet)] bg-white"
+                  style={{ border: '1px solid var(--border)', color: 'var(--foreground)' }}
+                />
+                <p className="text-xs leading-6" style={{ color: 'var(--muted)' }}>
+                  Add the cities or areas where you prefer to work. Separate with commas or new lines.
+                </p>
+              </Field>
             </div>
           </div>
 
@@ -595,7 +610,7 @@ export default function ProfileEditorPage() {
                       target="_blank"
                       rel="noreferrer"
                       aria-label="Open gallery image in a new tab"
-                      className="block h-full w-full"
+                      className="relative block h-full w-full"
                     >
                       <Image src={media[0].media_url} alt="" fill className="object-cover" sizes="(max-width: 768px) 100vw, 33vw" />
                     </a>
@@ -614,7 +629,7 @@ export default function ProfileEditorPage() {
                           target="_blank"
                           rel="noreferrer"
                           aria-label="Open gallery image in a new tab"
-                          className="block h-full w-full"
+                          className="relative block h-full w-full"
                         >
                           <Image src={m.media_url} alt="" fill className="object-cover" sizes="96px" />
                         </a>
@@ -652,7 +667,7 @@ export default function ProfileEditorPage() {
                         target="_blank"
                         rel="noreferrer"
                         aria-label="Open gallery image in a new tab"
-                        className="block h-full w-full"
+                        className="relative block h-full w-full"
                       >
                         <Image src={m.media_url} alt="" fill className="object-cover" sizes="64px" />
                       </a>

@@ -45,6 +45,7 @@ type ArtistEditorForm = {
   locality: string
   city: string
   state: string
+  preferred_working_locations: string
   performance_style: string
   event_types: string
   languages_spoken: string
@@ -67,6 +68,7 @@ function buildInitialForm(artist: AdminArtistCard): ArtistEditorForm {
     locality: artist.locality ?? '',
     city: artist.city ?? '',
     state: artist.state ?? '',
+    preferred_working_locations: artist.preferredWorkingLocations ?? '',
     performance_style: artist.performanceStyle ?? '',
     event_types: artist.eventTypes ?? '',
     languages_spoken: artist.languagesSpoken ?? '',
@@ -315,6 +317,7 @@ export default function AdminArtistProfileEditor({
           locality: form.locality,
           city: form.city,
           state: form.state,
+          preferred_working_locations: form.preferred_working_locations,
           performance_style: form.performance_style,
           event_types: form.event_types,
           languages_spoken: form.languages_spoken,
@@ -489,6 +492,13 @@ export default function AdminArtistProfileEditor({
               </div>
               <Field label="State">
                 <TextInput value={form.state} onChange={value => updateField('state', value)} placeholder="State" />
+              </Field>
+              <Field label="Preferred working locations">
+                <TextArea
+                  value={form.preferred_working_locations}
+                  onChange={value => updateField('preferred_working_locations', value)}
+                  placeholder="Mumbai, Thane, Navi Mumbai"
+                />
               </Field>
               <Field label="Bio / About">
                 <TextArea
@@ -695,7 +705,7 @@ export default function AdminArtistProfileEditor({
                           target="_blank"
                           rel="noreferrer"
                           aria-label={`Open media item for ${displayName}`}
-                          className="block h-full w-full"
+                          className="relative block h-full w-full"
                         >
                           <Image src={item.media_url} alt={displayName} fill className="object-cover object-top" sizes="(max-width: 768px) 100vw, 33vw" />
                         </a>

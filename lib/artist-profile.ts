@@ -11,6 +11,7 @@ export type PublicArtistRecord = {
   locality?: MaybeString
   city?: MaybeString
   state?: MaybeString
+  preferred_working_locations?: MaybeString
   bio?: MaybeString
   performance_style?: MaybeString
   event_types?: MaybeString
@@ -130,6 +131,16 @@ export function getArtistLocation(artist: PublicArtistRecord) {
   }
 
   return deduped.join(', ')
+}
+
+export function getArtistPreferredWorkingLocations(artist: PublicArtistRecord) {
+  return splitArtistTextList(artist.preferred_working_locations)
+}
+
+export function getArtistPreferredWorkingLocationsText(artist: PublicArtistRecord) {
+  const locations = getArtistPreferredWorkingLocations(artist)
+  if (locations.length === 0) return null
+  return locations.slice(0, 6).join(', ')
 }
 
 export function getArtistCategories(artist: PublicArtistRecord) {

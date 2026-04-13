@@ -5,7 +5,7 @@ import ArtistDashboardShell from '@/components/ArtistDashboardShell'
 import { CheckCircle, Clock, AlertCircle, XCircle, Edit, Eye, Mail } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import ArtistContactInformationSection from '@/components/ArtistContactInformationSection'
-import { getArtistDisplayName, getArtistPublicPath, getArtistCategories } from '@/lib/artist-profile'
+import { getArtistDisplayName, getArtistPublicPath, getArtistCategories, getArtistPreferredWorkingLocationsText } from '@/lib/artist-profile'
 import type { PublicArtistRecord } from '@/lib/artist-profile'
 import { isMissingEmailChangeRequestsTableError } from '@/lib/contact-info'
 
@@ -73,6 +73,7 @@ export default async function ArtistDashboard() {
     ? getArtistDisplayName(profile)
     : userRecord?.email?.split('@')[0] ?? 'ShowStellar Artist'
   const publicProfilePath = profile ? getArtistPublicPath(profile) : ''
+  const preferredWorkingLocations = profile ? getArtistPreferredWorkingLocationsText(profile) : null
   let pendingEmailRequest = null as
     | null
     | {
@@ -141,6 +142,11 @@ export default async function ArtistDashboard() {
                 }}
               />
             </div>
+            {preferredWorkingLocations && (
+              <p className="mb-4 text-sm leading-6" style={{ color: 'var(--muted)' }}>
+                <span className="font-medium text-[var(--foreground)]">Preferred locations:</span> {preferredWorkingLocations}
+              </p>
+            )}
             <Link
               href="/artist-dashboard/profile"
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium border transition-colors hover:opacity-80"

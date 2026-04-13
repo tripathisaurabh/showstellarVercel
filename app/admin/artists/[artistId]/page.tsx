@@ -181,6 +181,7 @@ export default async function AdminArtistDetailPage({
               <MetaRow label="Stage name" value={artist.stageName || '—'} />
               <MetaRow label="City" value={artist.city || '—'} />
               <MetaRow label="Locality" value={artist.location || '—'} />
+              <MetaRow label="Preferred working locations" value={artist.preferredWorkingLocations || '—'} />
               <MetaRow label="Pricing start" value={artist.pricingStart ? `₹${artist.pricingStart}` : '—'} />
               <MetaRow label="Rating" value={artist.rating != null ? `${Number(artist.rating).toFixed(1)} / 5.0` : '—'} />
               <MetaRow label="Experience" value={artist.experienceYears != null ? `${artist.experienceYears} yrs` : '—'} />

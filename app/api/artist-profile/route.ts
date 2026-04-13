@@ -17,6 +17,7 @@ type ArtistProfileUpdateBody = {
   locality?: string
   city?: string
   state?: string
+  preferred_working_locations?: string
   performance_style?: string
   event_types?: string
   languages_spoken?: string
@@ -143,6 +144,7 @@ export async function PATCH(request: Request) {
     locality: body.locality?.trim() || null,
     city: body.city?.trim() || null,
     state: body.state?.trim() || null,
+    preferred_working_locations: body.preferred_working_locations?.trim() || null,
     performance_style: body.performance_style?.trim() || null,
     event_types: body.event_types?.trim() || null,
     languages_spoken: body.languages_spoken?.trim() || null,

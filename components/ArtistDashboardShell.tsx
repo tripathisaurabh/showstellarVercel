@@ -2,8 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
-import { LayoutDashboard, User, LogOut, Menu } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { LayoutDashboard, User, LogOut, Menu, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import BrandLogo from '@/components/BrandLogo'
 
@@ -16,6 +16,13 @@ export default function ArtistDashboardShell({ children, artistName }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  useEffect(() => {
+    document.body.style.overflow = sidebarOpen ? 'hidden' : ''
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [sidebarOpen])
 
   async function handleLogout() {
     const supabase = createClient()
@@ -64,11 +71,23 @@ export default function ArtistDashboardShell({ children, artistName }: Props) {
       <div className="flex">
         {/* Sidebar */}
         <aside className={`
-          fixed lg:sticky top-16 left-0 h-[calc(100vh-4rem)] w-64 bg-white border-r z-30
+          fixed top-16 left-0 z-50 h-[calc(100dvh-4rem)] w-64 bg-white border-r overflow-y-auto shadow-xl
           transform transition-transform duration-200 ease-in-out
+          lg:sticky lg:top-16 lg:z-30 lg:h-[calc(100vh-4rem)] lg:shadow-none
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `} style={{ borderColor: 'var(--border)' }}>
-          <nav className="p-6 space-y-1">
+          <div className="flex items-center justify-between px-5 pt-5 pb-4 lg:hidden">
+            <div className="text-sm font-semibold text-[var(--foreground)]">Menu</div>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              aria-label="Close menu"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] text-[var(--foreground)]"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <nav className="px-5 pb-6 space-y-1">
             {navItems.map(({ href, label, icon: Icon }) => {
               const isActive = pathname === href
               return (
@@ -104,13 +123,13 @@ export default function ArtistDashboardShell({ children, artistName }: Props) {
         {/* Mobile overlay */}
         {sidebarOpen && (
           <div
-            className="fixed inset-0 bg-[rgba(0,23,57,0.2)] z-20 lg:hidden"
+            className="fixed inset-x-0 bottom-0 top-16 bg-[rgba(0,23,57,0.2)] z-40 lg:hidden backdrop-blur-[1px]"
             onClick={() => setSidebarOpen(false)}
           />
         )}
 
         {/* Main content */}
-        <main className="flex-1 p-6 lg:p-8">
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8">
           {children}
         </main>
       </div>

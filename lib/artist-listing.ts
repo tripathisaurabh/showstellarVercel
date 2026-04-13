@@ -59,6 +59,13 @@ function sanitizeQuery(value?: MaybeString) {
     .trim()
 }
 
+function splitFilterTerms(value?: MaybeString) {
+  return trim(value)
+    .split(/[\n,|]+/g)
+    .map(term => sanitizeQuery(term))
+    .filter(Boolean)
+}
+
 export function normalizeArtistListingPage(value?: string | number | null) {
   const raw = typeof value === 'string' ? Number(value) : value
   if (!Number.isFinite(Number(raw)) || Number(raw) < 1) return 1
@@ -175,6 +182,7 @@ type ListingRow = {
   locality?: MaybeString
   city?: MaybeString
   state?: MaybeString
+  preferred_working_locations?: MaybeString
   bio?: MaybeString
   performance_style?: MaybeString
   event_types?: MaybeString
@@ -203,7 +211,7 @@ function buildListingQuery(supabase: Awaited<ReturnType<typeof createClient>>) {
   return supabase
     .from('artist_profiles')
     .select(
-      'id, slug, stage_name, locality, city, state, bio, performance_style, event_types, languages_spoken, pricing_start, profile_image, profile_image_cropped, profile_image_original, is_featured, approval_status, rating, experience_years, category_id, categories, custom_categories, created_at, users(full_name), primary_category:categories(name)',
+      'id, slug, stage_name, locality, city, state, preferred_working_locations, bio, performance_style, event_types, languages_spoken, pricing_start, profile_image, profile_image_cropped, profile_image_original, is_featured, approval_status, rating, experience_years, category_id, categories, custom_categories, created_at, users(full_name), primary_category:categories(name)',
       { count: 'exact' }
     )
     .eq('approval_status', 'approved')
@@ -213,13 +221,19 @@ function applyListingFilters(
   query: ReturnType<typeof buildListingQuery>,
   filters: ArtistListingQuery
 ) {
-  const city = trim(filters.city)
+  const cityTerms = splitFilterTerms(filters.city)
   const category = trim(filters.category)
   const categoryValues = (filters.categoryValues ?? []).map(trim).filter(Boolean)
   const q = sanitizeQuery(filters.q)
 
-  if (city) {
-    query = query.or(`city.ilike.%${city}%,locality.ilike.%${city}%,state.ilike.%${city}%`)
+  if (cityTerms.length > 0) {
+    query = query.or(
+      cityTerms
+        .map(city =>
+          `city.ilike.%${city}%,locality.ilike.%${city}%,state.ilike.%${city}%,preferred_working_locations.ilike.%${city}%`
+        )
+        .join(',')
+    )
   }
 
   const categoryFilters = categoryValues.length > 0
@@ -244,6 +258,7 @@ function applyListingFilters(
       `city.ilike.%${q}%`,
       `locality.ilike.%${q}%`,
       `state.ilike.%${q}%`,
+      `preferred_working_locations.ilike.%${q}%`,
       `slug.ilike.%${q}%`,
       `categories.cs.{${qCategory}}`,
       `custom_categories.cs.{${qCategory}}`,

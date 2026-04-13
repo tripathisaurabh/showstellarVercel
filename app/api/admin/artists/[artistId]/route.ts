@@ -22,6 +22,7 @@ type UpdateBody = {
   locality?: string
   city?: string
   state?: string
+  preferred_working_locations?: string
   performance_style?: string
   event_types?: string
   languages_spoken?: string
@@ -161,6 +162,7 @@ export async function PATCH(
     body.locality !== undefined ||
     body.city !== undefined ||
     body.state !== undefined ||
+    body.preferred_working_locations !== undefined ||
     body.performance_style !== undefined ||
     body.event_types !== undefined ||
     body.languages_spoken !== undefined ||
@@ -225,6 +227,9 @@ export async function PATCH(
     if (body.locality !== undefined) updates.locality = body.locality.trim() || null
     if (body.city !== undefined) updates.city = body.city.trim() || null
     if (body.state !== undefined) updates.state = body.state.trim() || null
+    if (body.preferred_working_locations !== undefined) {
+      updates.preferred_working_locations = body.preferred_working_locations.trim() || null
+    }
     if (body.performance_style !== undefined) updates.performance_style = body.performance_style.trim() || null
     if (body.event_types !== undefined) updates.event_types = body.event_types.trim() || null
     if (body.languages_spoken !== undefined) updates.languages_spoken = body.languages_spoken.trim() || null
@@ -253,14 +258,39 @@ export async function PATCH(
   }
 
   if (Object.keys(updates).length > 0) {
-    const { error } = await (adminClient
+    const updateResult = await (adminClient
       .from('artist_profiles') as unknown as {
         update(values: Record<string, unknown>): { eq(column: string, value: string): Promise<{ error: { message?: string } | null }> }
       })
       .update(updates)
       .eq('id', artistId)
+    const { error } = updateResult
 
-    if (error) {
+    const missingColumnErrorCode = (error as { code?: string } | null | undefined)?.code
+    const isMissingColumnError =
+      missingColumnErrorCode === '42703' ||
+      missingColumnErrorCode === 'PGRST204' ||
+      (typeof error?.message === 'string' &&
+        (error.message.includes("preferred_working_locations") ||
+          error.message.includes("profile_image_cropped")))
+
+    if (isMissingColumnError) {
+      const legacyUpdates = { ...updates }
+      delete legacyUpdates.preferred_working_locations
+      delete legacyUpdates.profile_image_cropped
+
+      const fallbackResult = await (adminClient
+        .from('artist_profiles') as unknown as {
+          update(values: Record<string, unknown>): { eq(column: string, value: string): Promise<{ error: { message?: string } | null }> }
+        })
+        .update(legacyUpdates)
+        .eq('id', artistId)
+
+      if (fallbackResult.error) {
+        console.error('[admin] artist update failed:', fallbackResult.error)
+        return NextResponse.json({ ok: false, error: 'Failed to update artist' }, { status: 500 })
+      }
+    } else if (error) {
       console.error('[admin] artist update failed:', error)
       return NextResponse.json({ ok: false, error: 'Failed to update artist' }, { status: 500 })
     }
