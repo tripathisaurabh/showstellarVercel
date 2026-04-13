@@ -4,8 +4,10 @@ import { createClient } from '@/lib/supabase/server'
 import ArtistDashboardShell from '@/components/ArtistDashboardShell'
 import { CheckCircle, Clock, AlertCircle, XCircle, Edit, Eye, Mail } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import ArtistContactInformationSection from '@/components/ArtistContactInformationSection'
 import { getArtistDisplayName, getArtistPublicPath, getArtistCategories } from '@/lib/artist-profile'
 import type { PublicArtistRecord } from '@/lib/artist-profile'
+import { isMissingEmailChangeRequestsTableError } from '@/lib/contact-info'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,13 +43,13 @@ export default async function ArtistDashboard() {
 
   const { data: userRecord } = await supabase
     .from('users')
-    .select('role, email')
+    .select('role, email, phone_number')
     .eq('id', user.id)
     .maybeSingle()
 
   const profileResult = (await supabase
     .from('artist_profiles')
-    .select('*, users(full_name, phone_number), primary_category:categories(name), categories, custom_categories')
+    .select('*, users(full_name, phone_number, email), primary_category:categories(name), categories, custom_categories')
     .eq('user_id', user.id)
     .maybeSingle()) as { data: PublicArtistRecord | null }
   const { data: profile } = profileResult
@@ -71,6 +73,29 @@ export default async function ArtistDashboard() {
     ? getArtistDisplayName(profile)
     : userRecord?.email?.split('@')[0] ?? 'ShowStellar Artist'
   const publicProfilePath = profile ? getArtistPublicPath(profile) : ''
+  let pendingEmailRequest = null as
+    | null
+    | {
+        id: string
+        status: string
+        current_email: string
+        requested_email: string
+        reason: string | null
+        created_at: string | null
+        updated_at: string | null
+      }
+
+  const pendingEmailRequestResult = await supabase
+    .from('email_change_requests')
+    .select('id, status, current_email, requested_email, reason, created_at, updated_at')
+    .eq('user_id', user.id)
+    .eq('status', 'pending')
+    .maybeSingle()
+
+  if (!isMissingEmailChangeRequestsTableError(pendingEmailRequestResult.error)) {
+    pendingEmailRequest = pendingEmailRequestResult.data
+  }
+  const emailChangeRequestsEnabled = !isMissingEmailChangeRequestsTableError(pendingEmailRequestResult.error)
 
   return (
     <ArtistDashboardShell artistName={artistName}>
@@ -142,6 +167,27 @@ export default async function ArtistDashboard() {
               <SubmitForReviewButton artistId={profile?.id} />
             )}
           </div>
+        </div>
+
+        <div className="mb-8">
+          <ArtistContactInformationSection
+            artistId={profile?.id ?? ''}
+            email={userRecord?.email ?? profile?.users?.email ?? null}
+            phoneNumber={profile?.users?.phone_number ?? userRecord?.phone_number ?? null}
+            emailChangeRequestsEnabled={emailChangeRequestsEnabled}
+            pendingEmailRequest={
+              pendingEmailRequest
+                ? {
+                    id: pendingEmailRequest.id,
+                    status: pendingEmailRequest.status,
+                    currentEmail: pendingEmailRequest.current_email,
+                    requestedEmail: pendingEmailRequest.requested_email,
+                    reason: pendingEmailRequest.reason ?? null,
+                    createdAt: pendingEmailRequest.created_at ?? null,
+                  }
+                : null
+            }
+          />
         </div>
 
         {/* Quick Actions */}

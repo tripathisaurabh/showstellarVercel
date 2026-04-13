@@ -7,6 +7,7 @@ import {
   Clock,
   FileText,
   Filter,
+  Mail,
   ShieldAlert,
   Star,
   Users,
@@ -131,7 +132,7 @@ export default async function AdminPage({
           <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
             ShowStellar Management · {userRecord?.email ?? user.email}
           </p>
-          <div className="mt-4">
+          <div className="mt-4 flex flex-wrap gap-3">
             <Link
               href="/admin/email-center"
               className="inline-flex items-center rounded-full border px-4 py-2 text-sm font-semibold transition-colors"
@@ -140,8 +141,20 @@ export default async function AdminPage({
                 color: 'var(--navy)',
                 borderColor: 'rgba(0, 23, 57, 0.12)',
               }}
-            >
+              >
               Open Email Center
+            </Link>
+            <Link
+              href="/admin/email-change-requests"
+              className="inline-flex items-center rounded-full border px-4 py-2 text-sm font-semibold transition-colors"
+              style={{
+                background: 'white',
+                color: 'var(--foreground)',
+                borderColor: 'rgba(0, 23, 57, 0.12)',
+              }}
+            >
+              <Mail className="mr-2 h-4 w-4" />
+              Email Change Requests
             </Link>
           </div>
         </div>
