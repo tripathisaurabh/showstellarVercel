@@ -1,8 +1,10 @@
 import type { Metadata } from 'next'
-import Image from 'next/image'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import Footer from '@/components/Footer'
+import ArtistListingCard from '@/components/ArtistListingCard'
+import PaginationControls from '@/components/PaginationControls'
+import { normalizeArtistListingPage } from '@/lib/artist-listing'
 import {
   buildCityCategoryBreadcrumbJsonLd,
   buildCityCategoryCollectionJsonLd,
@@ -14,85 +16,56 @@ import {
   loadSeoCityCategoryPage,
   slugifyCity,
 } from '@/lib/seo-pages'
-import {
-  getArtistCategories,
-  getArtistDisplayName,
-  getArtistExperienceYears,
-  getArtistLocation,
-  getArtistPublicPath,
-  getArtistSummaryLine,
-  type PublicArtistRecord,
-} from '@/lib/artist-profile'
 
 type PageParams = Promise<{ city: string; category: string }>
+type PageSearchParams = Promise<{ page?: string }>
 
-const FALLBACK_NAME = 'Artist profile'
-const FALLBACK_PRICE = 'Contact for price'
-const FALLBACK_CATEGORY = 'Updating soon'
-const FALLBACK_LOCATION = 'Updating soon'
-const FALLBACK_EXPERIENCE = 'Updating soon'
-const FALLBACK_BIO = 'Updating soon'
-
-const trimText = (value?: string | null) => value?.trim() ?? ''
-
-function getDisplayName(artist: PublicArtistRecord) {
-  const name = trimText(getArtistDisplayName(artist))
-  return name || FALLBACK_NAME
-}
-
-function getPriceText(value?: number | string | null) {
-  const price = value != null ? Number(value) : null
-  if (price === null || Number.isNaN(price) || price <= 0) return FALLBACK_PRICE
-  return `₹${price.toLocaleString()}`
-}
-
-function getCategoryText(artist: PublicArtistRecord) {
-  const categories = getArtistCategories(artist).combined.map(trimText).filter(Boolean)
-  if (categories.length === 0) return FALLBACK_CATEGORY
-  const visible = categories.slice(0, 2)
-  const extra = categories.length - visible.length
-  return extra > 0 ? `${visible.join(', ')} +${extra}` : visible.join(', ')
-}
-
-function getLocationText(artist: PublicArtistRecord) {
-  return trimText(getArtistLocation(artist) || artist.city) || FALLBACK_LOCATION
-}
-
-function getExperienceText(value?: number | string | null) {
-  if (value == null || value === '') return FALLBACK_EXPERIENCE
-  const years = typeof value === 'number' ? value : Number(value)
-  if (!Number.isFinite(years) || years < 0) return FALLBACK_EXPERIENCE
-  const normalized = Math.floor(years)
-  return `${normalized} ${normalized === 1 ? 'year' : 'years'}`
-}
-
-function getBioText(artist: PublicArtistRecord) {
-  return trimText(artist.bio) || getArtistSummaryLine(artist) || FALLBACK_BIO
-}
-
-export async function generateMetadata({ params }: { params: PageParams }): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
+  params: PageParams
+  searchParams: PageSearchParams
+}): Promise<Metadata> {
   const { city, category } = await params
-  const page = await loadSeoCityCategoryPage(city, category)
+  const resolvedSearchParams = await searchParams
+  const page = normalizeArtistListingPage(resolvedSearchParams.page)
+  const pageData = await loadSeoCityCategoryPage(city, category, page)
 
-  if (!page || page.artists.length === 0) {
+  if (!pageData || pageData.totalPages === 0 || pageData.page > pageData.totalPages) {
     return {
       title: 'Artists not found | ShowStellar',
       robots: { index: false, follow: false },
     }
   }
 
-  return buildCityCategoryMetadata(page.cityLabel, page.category.pluralLabel, page.citySlug, page.category.slug, page.artists.length)
+  return buildCityCategoryMetadata(
+    pageData.cityLabel,
+    pageData.category.pluralLabel,
+    pageData.citySlug,
+    pageData.category.slug,
+    pageData.total,
+    pageData.page
+  )
 }
 
-export default async function CityCategorySeoPage({ params }: { params: PageParams }) {
+export default async function CityCategorySeoPage({
+  params,
+  searchParams,
+}: {
+  params: PageParams
+  searchParams: PageSearchParams
+}) {
   const { city, category } = await params
-  const page = await loadSeoCityCategoryPage(city, category)
+  const resolvedSearchParams = await searchParams
+  const page = normalizeArtistListingPage(resolvedSearchParams.page)
+  const pageData = await loadSeoCityCategoryPage(city, category, page)
 
-  if (!page || page.artists.length === 0) {
+  if (!pageData || pageData.totalPages === 0 || pageData.page > pageData.totalPages) {
     notFound()
   }
 
-  const { cityLabel, category: categoryDef, canonicalPath, artists } = page
+  const { cityLabel, category: categoryDef, canonicalPath, artists, total, totalPages } = pageData
   const title = `${categoryDef.pluralLabel} in ${cityLabel}`
   const intro = `Looking to book ${categoryDef.pluralLabel.toLowerCase()} in ${cityLabel}? ShowStellar helps you compare verified profiles, pricing, languages, experience, and performance style in one place.`
   const guidance = `This page is useful for weddings, birthdays, sangeets, corporate events, and private celebrations where you want the right artist without sorting through unrelated results. Review each profile for photo quality, event types, and booking fit before reaching out.`
@@ -143,85 +116,48 @@ export default async function CityCategorySeoPage({ params }: { params: PagePara
         <section className="mt-8">
           <div className="mb-4 flex items-center justify-between gap-4">
             <p className="text-sm text-[var(--muted)]">
-              Showing <span className="font-semibold text-[var(--foreground)]">{artists.length}</span> verified artists
+              Showing <span className="font-semibold text-[var(--foreground)]">{artists.length}</span> of{' '}
+              <span className="font-semibold text-[var(--foreground)]">{total}</span> verified artists
+              {totalPages > 1 ? ` · Page ${page}` : ''}
             </p>
           </div>
 
-          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {artists.map((artist, index) => {
-              const displayName = getDisplayName(artist)
-              const priceText = getPriceText(artist.pricing_start)
-              const categoryText = getCategoryText(artist)
-              const locationText = getLocationText(artist)
-              const experienceText = getExperienceText(getArtistExperienceYears(artist))
-              const bioText = getBioText(artist)
-              const image = artist.profile_image_cropped ?? artist.profile_image ?? null
+          {artists.length === 0 ? (
+            <div className="rounded-2xl border border-[var(--border)] bg-white p-10 text-center sm:p-16">
+              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl" style={{ background: 'var(--surface-2)' }}>
+                <span className="text-4xl">🎭</span>
+              </div>
+              <h3 className="mb-3 text-2xl font-semibold" style={{ color: 'var(--foreground)' }}>
+                No artists found
+              </h3>
+              <p className="mb-6" style={{ color: 'var(--muted)' }}>
+                Try exploring nearby cities or related categories.
+              </p>
+              <Link
+                href="/artists"
+                className="inline-block rounded-xl border px-6 py-3 text-sm font-semibold transition-colors hover:opacity-80"
+                style={{ border: '1px solid var(--border)', color: 'var(--foreground)' }}
+              >
+                Browse all artists
+              </Link>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+                {artists.map(artist => (
+                  <ArtistListingCard key={artist.id} artist={artist} />
+                ))}
+              </div>
 
-              return (
-                <Link key={artist.id} href={getArtistPublicPath(artist)} className="group block h-full">
-                  <article className="flex h-[500px] flex-col overflow-hidden rounded-[1.75rem] border border-[rgba(0,23,57,0.08)] bg-white shadow-[0_20px_48px_rgba(0,23,57,0.10)] transition-all duration-300 hover:-translate-y-1 hover:border-[rgba(0,23,57,0.14)] hover:shadow-[0_28px_64px_rgba(0,23,57,0.18)] sm:h-[520px] lg:h-[560px]">
-                    <div className="relative flex h-[220px] items-center justify-center overflow-hidden bg-[linear-gradient(180deg,#ffffff_0%,#eef2f7_100%)] sm:h-[240px] lg:h-[280px]">
-                      {image ? (
-                        <Image
-                          src={image}
-                          alt={displayName}
-                          fill
-                          sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                          priority={index < 3}
-                          className="object-cover object-top transition-transform duration-500 group-hover:scale-[1.01]"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(180deg,#ffffff_0%,#eef2f7_100%)] text-4xl sm:text-5xl">🎭</div>
-                      )}
-                      {artist.is_featured && (
-                        <div className="absolute left-3 top-3 rounded-full border border-white/15 bg-[var(--navy)] px-3 py-1.5 text-[11px] font-semibold text-white shadow-[0_10px_24px_rgba(0,23,57,0.2)] sm:left-4 sm:top-4 sm:text-xs">
-                          Featured
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex flex-1 flex-col px-4 py-3.5 sm:px-5 sm:py-4.5">
-                      <div className="flex flex-1 flex-col">
-                        <div className="flex items-start justify-between gap-4">
-                          <h2 className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight text-[var(--foreground)] sm:text-lg">
-                            {displayName}
-                          </h2>
-                          <div className="flex-shrink-0 text-right">
-                            <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--muted)]">Price</div>
-                            <div className="mt-0.5 text-sm font-semibold text-[var(--foreground)]">
-                              {priceText}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mt-2.5 space-y-2 text-sm leading-6 text-[var(--muted)]">
-                          <p className="line-clamp-1">
-                            <span className="font-semibold text-[var(--foreground)]">Category:</span> {categoryText}
-                          </p>
-                          <p className="line-clamp-1">
-                            <span className="font-semibold text-[var(--foreground)]">Location:</span> {locationText}
-                          </p>
-                          <p className="line-clamp-1">
-                            <span className="font-semibold text-[var(--foreground)]">Experience:</span> {experienceText}
-                          </p>
-                          <p className="line-clamp-2">
-                            <span className="font-semibold text-[var(--foreground)]">Bio:</span> {bioText}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 flex items-center justify-between gap-3 border-t border-[rgba(0,23,57,0.06)] pt-3.5 text-sm text-[var(--muted)]">
-                        <span className="inline-flex items-center gap-1 font-medium text-[var(--navy)]">
-                          View profile
-                          <span aria-hidden="true">→</span>
-                        </span>
-                      </div>
-                    </div>
-                  </article>
-                </Link>
-              )
-            })}
-          </div>
+              <PaginationControls
+                pathname={buildCityCategoryPath(city, categoryDef.slug)}
+                query={{}}
+                page={page}
+                totalPages={totalPages}
+                label={`${categoryDef.pluralLabel} in ${cityLabel} pagination`}
+              />
+            </>
+          )}
         </section>
 
         <section className="mt-8 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
@@ -253,7 +189,7 @@ export default async function CityCategorySeoPage({ params }: { params: PagePara
                   {relatedCategories.map(item => (
                     <Link
                       key={item.slug}
-                      href={buildCityCategoryPath(page.citySlug, item.slug)}
+                      href={buildCityCategoryPath(pageData.citySlug, item.slug)}
                       className="rounded-full border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--foreground)] transition-colors hover:bg-[var(--surface-2)]"
                     >
                       {item.pluralLabel}

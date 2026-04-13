@@ -20,7 +20,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const supabase = getAdminSupabaseClient()
     const { data } = await supabase
       .from('artist_profiles')
-      .select('slug, id, created_at, city, locality, categories, custom_categories, primary_category:categories(name)')
+      .select('slug, id, created_at, stage_name, bio, profile_image, profile_image_cropped, profile_image_original, rating, experience_years, city, locality, state, categories, custom_categories, artist_media(id, media_url, type), users(full_name), primary_category:categories(name)')
       .eq('approval_status', 'approved')
 
     const approvedArtists = (data ?? []) as PublicArtistRecord[]

@@ -42,12 +42,13 @@ export default function ArtistFilters({
     [query, category, city]
   )
 
-  function replaceParams(next: { q?: string; category?: string; city?: string }) {
+  function replaceParams(next: { q?: string; category?: string; city?: string; page?: string }) {
     const params = new URLSearchParams(searchParams.toString())
 
     const q = next.q ?? query
     const nextCategory = next.category ?? category
     const nextCity = next.city ?? city
+    const nextPage = next.page ?? '1'
 
     if (q.trim()) params.set('q', q.trim())
     else params.delete('q')
@@ -58,6 +59,9 @@ export default function ArtistFilters({
     if (nextCity.trim()) params.set('city', nextCity.trim())
     else params.delete('city')
 
+    if (nextPage.trim() && nextPage !== '1') params.set('page', nextPage.trim())
+    else params.delete('page')
+
     const qs = params.toString()
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }
@@ -66,7 +70,7 @@ export default function ArtistFilters({
     const handle = window.setTimeout(() => {
       const currentQ = searchParams.get('q') ?? ''
       if (query !== currentQ) {
-        replaceParams({ q: query })
+        replaceParams({ q: query, page: '1' })
       }
     }, 400)
 
@@ -79,12 +83,12 @@ export default function ArtistFilters({
 
   function handleCategoryChange(nextCategory: string) {
     setCategory(nextCategory)
-    replaceParams({ category: nextCategory })
+    replaceParams({ category: nextCategory, page: '1' })
   }
 
   function handleCityChange(nextCity: string) {
     setCity(nextCity)
-    replaceParams({ city: nextCity })
+    replaceParams({ city: nextCity, page: '1' })
   }
 
   function handleClear() {

@@ -15,6 +15,12 @@ import {
   type PublicArtistRecord,
 } from '@/lib/artist-profile'
 import { absoluteUrl, seoDefaults } from '@/lib/seo'
+import {
+  buildPaginatedCanonicalPath,
+  DEFAULT_ARTIST_LISTING_LIMIT,
+  fetchPaginatedArtistListings,
+  normalizeArtistListingLimit,
+} from '@/lib/artist-listing'
 
 type MaybeString = string | null | undefined
 
@@ -32,6 +38,11 @@ export type SeoCityCategoryPageData = {
   category: SeoCategoryDefinition
   canonicalPath: string
   artists: PublicArtistRecord[]
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+  hasMore: boolean
 }
 
 const trim = (value: MaybeString) => value?.trim() ?? ''
@@ -380,11 +391,20 @@ export function buildCityCategoryDescription(cityLabel: string, categoryLabel: s
   return `Book verified ${categoryLabel.toLowerCase()} in ${cityLabel} for weddings, birthdays, sangeets, and corporate events. Explore profiles, pricing, languages, and experience on ShowStellar.`
 }
 
-export function buildCityCategoryMetadata(cityLabel: string, categoryLabel: string, citySlug: string, categorySlug: string, artistCount: number): Metadata {
-  const canonical = buildCityCategoryPath(citySlug, categorySlug)
-  const title = artistCount > 0
-    ? buildCityCategoryTitle(cityLabel, categoryLabel)
-    : `Find ${categoryLabel} in ${cityLabel} | ShowStellar`
+export function buildCityCategoryMetadata(
+  cityLabel: string,
+  categoryLabel: string,
+  citySlug: string,
+  categorySlug: string,
+  artistCount: number,
+  page = 1
+): Metadata {
+  const canonical = buildPaginatedCanonicalPath(buildCityCategoryPath(citySlug, categorySlug), {}, page)
+  const title = page > 1
+    ? `${buildCityCategoryTitle(cityLabel, categoryLabel)} - Page ${page}`
+    : artistCount > 0
+      ? buildCityCategoryTitle(cityLabel, categoryLabel)
+      : `Find ${categoryLabel} in ${cityLabel} | ShowStellar`
 
   return {
     title,
@@ -520,46 +540,17 @@ export function buildCityCategoryItemListJsonLd(artists: PublicArtistRecord[], b
   }
 }
 
-function dedupeArtistsById(artists: PublicArtistRecord[]) {
-  const seen = new Set<string>()
-  const output: PublicArtistRecord[] = []
-  for (const artist of artists) {
-    if (seen.has(artist.id)) continue
-    seen.add(artist.id)
-    output.push(artist)
-  }
-  return output
-}
-
-function sortSeoArtists(artists: PublicArtistRecord[]) {
-  return [...artists].sort((a, b) => {
-    const aFeatured = a.is_featured ? 1 : 0
-    const bFeatured = b.is_featured ? 1 : 0
-    if (aFeatured !== bFeatured) return bFeatured - aFeatured
-
-    const aRating = a.rating != null ? Number(a.rating) : -1
-    const bRating = b.rating != null ? Number(b.rating) : -1
-    if (aRating !== bRating) return bRating - aRating
-
-    const aExp = a.experience_years != null ? Number(a.experience_years) : -1
-    const bExp = b.experience_years != null ? Number(b.experience_years) : -1
-    return bExp - aExp
-  })
-}
-
-function buildArtistSelectQuery(supabase: Awaited<ReturnType<typeof createClient>>) {
-  return supabase
-    .from('artist_profiles')
-    .select('*, users(full_name), primary_category:categories(name), categories, custom_categories, rating, experience_years, is_featured, approval_status')
-    .eq('approval_status', 'approved')
-}
-
-export const loadSeoCityCategoryPage = cache(async (citySlug: string, categorySlug: string): Promise<SeoCityCategoryPageData | null> => {
+export const loadSeoCityCategoryPage = cache(async (
+  citySlug: string,
+  categorySlug: string,
+  page = 1,
+  limit = DEFAULT_ARTIST_LISTING_LIMIT
+): Promise<SeoCityCategoryPageData | null> => {
   const category = resolveSeoCategoryDefinition(categorySlug)
   if (!category) return null
 
   const cityLabel = resolveCityLabel(citySlug)
-  const canonicalPath = buildCityCategoryPath(citySlug, category.slug)
+  const canonicalPath = buildPaginatedCanonicalPath(buildCityCategoryPath(citySlug, category.slug), {}, page)
 
   if (!hasPublicSupabaseConfig()) {
     return {
@@ -568,24 +559,25 @@ export const loadSeoCityCategoryPage = cache(async (citySlug: string, categorySl
       category,
       canonicalPath,
       artists: [],
+      page,
+      limit,
+      total: 0,
+      totalPages: 0,
+      hasMore: false,
     }
   }
 
   const supabase = await createClient()
-  const [cityResult, localityResult, stateResult] = await Promise.all([
-    buildArtistSelectQuery(supabase).ilike('city', `%${cityLabel}%`),
-    buildArtistSelectQuery(supabase).ilike('locality', `%${cityLabel}%`),
-    buildArtistSelectQuery(supabase).ilike('state', `%${cityLabel}%`),
-  ])
-
-  const merged = dedupeArtistsById([
-    ...((cityResult.data ?? []) as PublicArtistRecord[]),
-    ...((localityResult.data ?? []) as PublicArtistRecord[]),
-    ...((stateResult.data ?? []) as PublicArtistRecord[]),
-  ])
-
-  const artists = sortSeoArtists(
-    merged.filter(artist => isArtistSeoIndexable(artist) && artistMatchesSeoCategory(artist, category.slug))
+  const { items, total, totalPages, hasMore } = await fetchPaginatedArtistListings(
+    supabase,
+    {
+      page,
+      limit: normalizeArtistListingLimit(limit),
+      city: cityLabel,
+      category: category.slug,
+      categoryValues: category.internalCategories,
+      sort: 'featured',
+    }
   )
 
   return {
@@ -593,7 +585,12 @@ export const loadSeoCityCategoryPage = cache(async (citySlug: string, categorySl
     cityLabel,
     category,
     canonicalPath,
-    artists,
+    artists: items.filter(artist => isArtistSeoIndexable(artist) && artistMatchesSeoCategory(artist, category.slug)),
+    page,
+    limit: normalizeArtistListingLimit(limit),
+    total,
+    totalPages,
+    hasMore,
   }
 })
 
