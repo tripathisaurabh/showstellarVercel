@@ -239,28 +239,73 @@ export default function ProfileEditorPage() {
       await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()))
       setPhotoBusyState({ phase: 'optimizing', message: 'Optimizing image...', progress: 28 })
       const { blob: croppedBlob } = await createCroppedImageBlob(pendingPhotoFile, geometry)
+      const supabase = getSupabase()
+      const croppedFile = new File([croppedBlob], `${timestamp}-${createUploadId()}.jpg`, { type: 'image/jpeg' })
 
       setPhotoBusyState({ phase: 'uploading', message: 'Uploading profile photo...', progress: 72 })
-      setPhotoBusyState({ phase: 'saving', message: 'Saving changes...', progress: 92 })
-      const formData = new FormData()
-      formData.append(
-        'profile_image_file',
-        new File([croppedBlob], `${timestamp}-${createUploadId()}.jpg`, { type: 'image/jpeg' })
-      )
-      formData.append('profile_image_original_file', pendingPhotoFile)
-
-      const response = await fetch('/api/artist-profile/photo', {
+      const signResponse = await fetch('/api/artist-profile/photo/sign', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          croppedFileName: croppedFile.name,
+          croppedFileType: croppedFile.type,
+          croppedFileSize: croppedFile.size,
+          originalFileName: pendingPhotoFile.name,
+          originalFileType: pendingPhotoFile.type,
+          originalFileSize: pendingPhotoFile.size,
+        }),
+      })
+
+      const signPayload = await signResponse.json().catch(() => null)
+      if (!signResponse.ok) {
+        throw new Error(signPayload?.error ?? 'Failed to prepare profile photo upload')
+      }
+
+      const croppedUpload = await supabase.storage
+        .from('artist-media')
+        .uploadToSignedUrl(signPayload.cropped.path, signPayload.cropped.token, croppedFile, {
+          contentType: croppedFile.type,
+        })
+
+      if (croppedUpload.error) {
+        throw croppedUpload.error
+      }
+
+      let originalPublicUrl = signPayload?.existingOriginalUrl ?? previousOriginalImage
+      if (signPayload?.original) {
+        const originalUpload = await supabase.storage
+          .from('artist-media')
+          .uploadToSignedUrl(signPayload.original.path, signPayload.original.token, pendingPhotoFile, {
+            contentType: pendingPhotoFile.type,
+          })
+
+        if (originalUpload.error) {
+          throw originalUpload.error
+        }
+
+        originalPublicUrl = signPayload.original.publicUrl
+      }
+
+      setPhotoBusyState({ phase: 'saving', message: 'Saving changes...', progress: 92 })
+      const croppedPublicUrl = signPayload.cropped.publicUrl
+      const response = await fetch('/api/artist-profile', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          profile_image: croppedPublicUrl,
+          profile_image_cropped: croppedPublicUrl,
+          profile_image_original: originalPublicUrl,
+          categories: categorySelection.categories,
+          custom_categories: categorySelection.customCategories,
+        }),
       })
 
       const payload = await response.json().catch(() => null)
       if (!response.ok) {
         throw new Error(payload?.error ?? 'Failed to save profile photo')
       }
-
-      const croppedPublicUrl = payload?.profileImageCropped ?? payload?.profileImage ?? previousCroppedImage
-      const originalPublicUrl = payload?.profileImageOriginal ?? previousOriginalImage
 
       setForm(current => ({
         ...current,
@@ -306,12 +351,39 @@ export default function ProfileEditorPage() {
     setUploadingMedia(true)
     setError('')
     try {
-      const formData = new FormData()
-      formData.append('file', file)
+      const supabase = getSupabase()
+      const signResponse = await fetch('/api/artist-profile/media/sign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+        }),
+      })
+
+      const signPayload = await signResponse.json().catch(() => null)
+      if (!signResponse.ok) {
+        throw new Error(signPayload?.error ?? 'Failed to prepare media upload')
+      }
+
+      const uploadResult = await supabase.storage
+        .from('artist-media')
+        .uploadToSignedUrl(signPayload.path, signPayload.token, file, {
+          contentType: file.type,
+        })
+
+      if (uploadResult.error) {
+        throw uploadResult.error
+      }
 
       const response = await fetch('/api/artist-profile/media', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          media_url: signPayload.publicUrl,
+          type: signPayload.type,
+        }),
       })
 
       const payload = await response.json().catch(() => null)
