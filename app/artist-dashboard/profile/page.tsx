@@ -22,7 +22,6 @@ import { createCroppedImageBlob, type ImageCropGeometry } from '@/lib/image-crop
 import {
   MAX_ARTIST_MEDIA_ITEMS,
   getArtistMediaLimitError,
-  getSafeFileExtension as getMediaFileExtension,
 } from '@/lib/admin-file-upload'
 
 export const dynamic = 'force-dynamic'
@@ -34,6 +33,7 @@ export default function ProfileEditorPage() {
   const MAX_PROFILE_IMAGE_SIZE_MB = 5
   const MAX_MEDIA_SIZE_MB = 50
   const allowedImageMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
+  const allowedGalleryImageMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
   const allowedVideoMimeTypes = new Set(['video/mp4', 'video/webm', 'video/quicktime'])
 
   type PhotoBusyState = {
@@ -96,8 +96,8 @@ export default function ProfileEditorPage() {
       return 'Please upload a JPG, PNG, or WebP image.'
     }
 
-    if (kind === 'media' && !allowedImageMimeTypes.has(file.type) && !allowedVideoMimeTypes.has(file.type)) {
-      return 'Please upload a JPG, PNG, WebP, MP4, WebM, or MOV file.'
+    if (kind === 'media' && !allowedGalleryImageMimeTypes.has(file.type) && !allowedVideoMimeTypes.has(file.type)) {
+      return 'Please upload a JPG, PNG, WebP, GIF, MP4, WebM, or MOV file.'
     }
 
     const maxSize = kind === 'image' ? MAX_PROFILE_IMAGE_SIZE_MB : MAX_MEDIA_SIZE_MB
@@ -239,51 +239,26 @@ export default function ProfileEditorPage() {
       const { blob: croppedBlob } = await createCroppedImageBlob(pendingPhotoFile, geometry)
 
       setPhotoBusyState({ phase: 'uploading', message: 'Uploading profile photo...', progress: 72 })
-      const supabase = getSupabase()
-      const originalExt = getMediaFileExtension(pendingPhotoFile)
-      const croppedPath = `dp/${profileId}/${timestamp}-${createUploadId()}.jpg`
-      const originalPath = `dp-original/${profileId}/${timestamp}-${createUploadId()}.${originalExt}`
-
-      const [croppedUpload, originalUpload] = await Promise.all([
-        supabase.storage.from('artist-media').upload(croppedPath, croppedBlob, {
-          upsert: true,
-          contentType: 'image/jpeg',
-        }),
-        supabase.storage.from('artist-media').upload(originalPath, pendingPhotoFile, {
-          upsert: true,
-        }),
-      ])
-
-      if (croppedUpload.error) {
-        throw croppedUpload.error
-      }
-
-      const {
-        data: { publicUrl: croppedPublicUrl },
-      } = supabase.storage.from('artist-media').getPublicUrl(croppedPath)
-      const originalPublicUrl = originalUpload.error
-        ? null
-        : supabase.storage.from('artist-media').getPublicUrl(originalPath).data.publicUrl
-
       setPhotoBusyState({ phase: 'saving', message: 'Saving changes...', progress: 92 })
-      const response = await fetch('/api/artist-profile', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          profile_image: croppedPublicUrl,
-          profile_image_cropped: croppedPublicUrl,
-          profile_image_original: originalPublicUrl,
-          categories: categorySelection.categories,
-          custom_categories: categorySelection.customCategories,
-        }),
+      const formData = new FormData()
+      formData.append(
+        'profile_image_file',
+        new File([croppedBlob], `${timestamp}-${createUploadId()}.jpg`, { type: 'image/jpeg' })
+      )
+      formData.append('profile_image_original_file', pendingPhotoFile)
+
+      const response = await fetch('/api/artist-profile/photo', {
+        method: 'POST',
+        body: formData,
       })
 
       const payload = await response.json().catch(() => null)
       if (!response.ok) {
         throw new Error(payload?.error ?? 'Failed to save profile photo')
       }
+
+      const croppedPublicUrl = payload?.profileImageCropped ?? payload?.profileImage ?? previousCroppedImage
+      const originalPublicUrl = payload?.profileImageOriginal ?? previousOriginalImage
 
       setForm(current => ({
         ...current,
@@ -329,23 +304,22 @@ export default function ProfileEditorPage() {
     setUploadingMedia(true)
     setError('')
     try {
-      const supabase = getSupabase()
-      const ext = getMediaFileExtension(file)
-      const path = `gallery/${profileId}/${Date.now()}.${ext}`
-      const { error: uploadError } = await supabase.storage
-        .from('artist-media')
-        .upload(path, file)
-      if (uploadError) throw uploadError
+      const formData = new FormData()
+      formData.append('file', file)
 
-      const { data: { publicUrl } } = supabase.storage.from('artist-media').getPublicUrl(path)
-      const type = file.type.startsWith('video') ? 'video' : 'image'
+      const response = await fetch('/api/artist-profile/media', {
+        method: 'POST',
+        body: formData,
+      })
 
-      const { error: insertError } = await supabase
-        .from('artist_media')
-        .insert({ artist_id: profileId, media_url: publicUrl, type })
-      if (insertError) throw insertError
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(payload?.error ?? 'Failed to upload media')
+      }
 
-      setMedia(m => [...m, { id: createUploadId(), media_url: publicUrl, type }])
+      if (payload?.media) {
+        setMedia(current => [...current, payload.media])
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to upload media')
     } finally {
@@ -355,9 +329,21 @@ export default function ProfileEditorPage() {
   }
 
   async function deleteMedia(id: string) {
-    const supabase = getSupabase()
-    await supabase.from('artist_media').delete().eq('id', id)
-    setMedia(m => m.filter(x => x.id !== id))
+    try {
+      setError('')
+      const response = await fetch(`/api/artist-profile/media/${id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        throw new Error(payload?.error ?? 'Failed to delete media')
+      }
+
+      setMedia(m => m.filter(x => x.id !== id))
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete media')
+    }
   }
 
   const avatarInitials = getArtistInitials({
@@ -636,7 +622,8 @@ export default function ProfileEditorPage() {
                       )
                     }
                     <button
-                      onClick={() => deleteMedia(m.id)}
+                      type="button"
+                      onClick={() => void deleteMedia(m.id)}
                       className="absolute top-2 right-2 w-7 h-7 rounded-full text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                       style={{ background: 'var(--foreground)' }}
                     >
@@ -674,7 +661,8 @@ export default function ProfileEditorPage() {
                     )
                   }
                   <button
-                    onClick={() => deleteMedia(m.id)}
+                    type="button"
+                    onClick={() => void deleteMedia(m.id)}
                     className="absolute top-2 right-2 w-7 h-7 rounded-full text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                     style={{ background: 'var(--foreground)' }}
                   >

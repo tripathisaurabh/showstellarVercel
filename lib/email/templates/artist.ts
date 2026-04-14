@@ -7,6 +7,7 @@ import type {
 import { getSiteUrl } from '@/lib/seo'
 
 export const ARTIST_EMAIL_TEMPLATE_KEYS = [
+  'invite_artist_to_join',
   'account_created',
   'verification_reminder',
   'profile_incomplete_reminder',
@@ -26,6 +27,7 @@ export type ArtistEmailTemplateKey = (typeof ARTIST_EMAIL_TEMPLATE_KEYS)[number]
 export type ArtistEmailPayload = {
   artist_name?: string
   artist_email?: string
+  join_link?: string
   dashboard_link?: string
   profile_link?: string
   verification_link?: string
@@ -111,6 +113,7 @@ function sharedInitialData(): EmailTemplateData {
   return {
     artist_name: '',
     artist_email: '',
+    join_link: siteLink('/artist-signup'),
     dashboard_link: siteLink('/artist-dashboard'),
     profile_link: siteLink('/artist-dashboard/profile'),
     verification_link: siteLink('/verify-email'),
@@ -338,6 +341,7 @@ function defaultPayload(payload: ArtistEmailPayload) {
   return {
     artist_name: normalizeText(payload.artist_name),
     artist_email: normalizeText(payload.artist_email),
+    join_link: normalizeText(payload.join_link) || siteLink('/artist-signup'),
     dashboard_link: normalizeText(payload.dashboard_link) || siteLink('/artist-dashboard'),
     profile_link: normalizeText(payload.profile_link) || siteLink('/artist-dashboard/profile'),
     verification_link: normalizeText(payload.verification_link),
@@ -369,6 +373,61 @@ function artistLinkSummary(payload: ReturnType<typeof defaultPayload>) {
 
 function getTemplateConfig(templateKey: ArtistEmailTemplateKey): TemplateConfig {
   const configs: Record<ArtistEmailTemplateKey, TemplateConfig> = {
+    invite_artist_to_join: {
+      key: 'invite_artist_to_join',
+      label: 'Invite Artist to Join',
+      description: 'Invite a new artist to sign up on ShowStellar.',
+      notes: 'Use this for outbound artist recruitment when you want to share the ShowStellar value proposition and direct them to the signup page.',
+      defaultSubject: 'Join ShowStellar as an artist',
+      fields: baseFields([
+        { name: 'join_link', label: 'Join link', type: 'url', required: true, placeholder: siteLink('/artist-signup') },
+        { name: 'city', label: 'City', type: 'text', required: false, placeholder: 'Mumbai' },
+        { name: 'category', label: 'Category', type: 'text', required: false, placeholder: 'Singer' },
+        { name: 'note', label: 'Custom note', type: 'text', required: false, placeholder: 'We would love to feature your work on ShowStellar.' },
+      ]),
+      initialData: () => ({ ...sharedInitialData(), note: '' }),
+      subject: payload => {
+        const data = defaultPayload(payload)
+        const categoryLabel = data.category ? ` as a ${data.category}` : ''
+        return `Join ShowStellar${categoryLabel}`
+      },
+      build: payload => {
+        const data = defaultPayload(payload)
+        const inviteBullets = [
+          data.category ? `Create your artist profile${data.city ? ` for ${data.city}` : ''} and get discovered by clients looking for ${data.category.toLowerCase()} talent.` : 'Create your artist profile and get discovered by clients looking for live talent.',
+          'Share your photos, videos, and performance details in one place.',
+          'Receive relevant booking inquiries through the platform.',
+        ]
+
+        if (data.note) {
+          inviteBullets.push(data.note)
+        }
+
+        return {
+          title: 'Join ShowStellar',
+          intro: `Hi ${data.artist_name || 'Artist'}, we would love to invite you to join ShowStellar and create your artist profile.`,
+          sections: [
+            {
+              type: 'paragraph',
+              text: 'ShowStellar helps artists present their work professionally and connect with clients planning weddings, private events, and brand experiences.',
+            },
+            ...bulletSection('Why join', inviteBullets),
+            ...(data.category || data.city || data.artist_email
+              ? detailSection('Invitation details', sectionsFromFieldPairs([
+                  ['Artist', data.artist_name],
+                  ['Email', data.artist_email],
+                  ['Category', data.category],
+                  ['City', data.city],
+                ]))
+              : []),
+          ],
+          cta: { label: 'Join ShowStellar', href: data.join_link },
+          footer: 'Artist invitation',
+          badge: 'Invitation',
+          supportEmail: data.support_email,
+        }
+      },
+    },
     account_created: {
       key: 'account_created',
       label: 'Account Created',
@@ -848,6 +907,7 @@ export function getArtistEmailTemplateDefinition(templateKey: ArtistEmailTemplat
       getArtistEmailTemplate(templateKey, {
         artist_name: data.artist_name ?? data.artistName ?? '',
         artist_email: data.artist_email ?? data.artistEmail ?? '',
+        join_link: data.join_link ?? data.joinLink ?? '',
         dashboard_link: data.dashboard_link ?? data.dashboardLink ?? '',
         profile_link: data.profile_link ?? data.profileLink ?? '',
         verification_link: data.verification_link ?? data.verificationLink ?? '',
@@ -866,6 +926,7 @@ export function getArtistEmailTemplateDefinition(templateKey: ArtistEmailTemplat
       getArtistEmailTemplate(templateKey, {
         artist_name: data.artist_name ?? data.artistName ?? '',
         artist_email: data.artist_email ?? data.artistEmail ?? '',
+        join_link: data.join_link ?? data.joinLink ?? '',
         dashboard_link: data.dashboard_link ?? data.dashboardLink ?? '',
         profile_link: data.profile_link ?? data.profileLink ?? '',
         verification_link: data.verification_link ?? data.verificationLink ?? '',
@@ -884,6 +945,7 @@ export function getArtistEmailTemplateDefinition(templateKey: ArtistEmailTemplat
       getArtistEmailTemplate(templateKey, {
         artist_name: data.artist_name ?? data.artistName ?? '',
         artist_email: data.artist_email ?? data.artistEmail ?? '',
+        join_link: data.join_link ?? data.joinLink ?? '',
         dashboard_link: data.dashboard_link ?? data.dashboardLink ?? '',
         profile_link: data.profile_link ?? data.profileLink ?? '',
         verification_link: data.verification_link ?? data.verificationLink ?? '',

@@ -46,6 +46,7 @@ const trim = (value?: string | null) => value?.trim() ?? ''
 type ArtistEmailSource = {
   artistName?: string | null
   artistEmail?: string | null
+  joinLink?: string | null
   loginEmail?: string | null
   dashboardLink?: string | null
   profileLink?: string | null
@@ -64,6 +65,7 @@ type ArtistEmailSource = {
 export type ArtistEmailCenterSeed = ArtistEmailPayload & {
   artistName: string
   artistEmail: string
+  joinLink: string
   dashboardLink: string
   profileLink: string
   verificationLink: string
@@ -138,6 +140,7 @@ function buildArtistEmailPayload(source: ArtistEmailSource): ArtistEmailPayload 
   return {
     artist_name: trim(source.artistName),
     artist_email: trim(source.artistEmail),
+    join_link: trim(source.joinLink) || siteLink('/artist-signup'),
     dashboard_link: trim(source.dashboardLink) || siteLink('/artist-dashboard'),
     profile_link: trim(source.profileLink) || siteLink('/artist-dashboard/profile'),
     verification_link: trim(source.verificationLink) || siteLink('/verify-email'),
@@ -162,6 +165,7 @@ export function buildArtistEmailCenterSeed(artist: AdminArtistCard) {
   const payload = buildArtistEmailPayload({
     artistName: artist.displayName ?? '',
     artistEmail: artist.email ?? '',
+    joinLink: siteLink('/artist-signup'),
     loginEmail: artist.email ?? '',
     dashboardLink: siteLink('/artist-dashboard'),
     profileLink: siteLink(artist.publicProfilePath || `/artist/${artist.slug ?? artist.id}`),
@@ -177,6 +181,7 @@ export function buildArtistEmailCenterSeed(artist: AdminArtistCard) {
   return {
     artistName: payload.artist_name ?? '',
     artistEmail: payload.artist_email ?? '',
+    joinLink: payload.join_link ?? '',
     loginEmail: payload.login_email ?? '',
     dashboardLink: payload.dashboard_link ?? '',
     profileLink: payload.profile_link ?? '',
@@ -192,6 +197,7 @@ export function buildArtistEmailCenterSeed(artist: AdminArtistCard) {
     requestedAt: payload.requested_at ?? '',
     artist_name: payload.artist_name ?? '',
     artist_email: payload.artist_email ?? '',
+    join_link: payload.join_link ?? '',
     login_email: payload.login_email ?? '',
     dashboard_link: payload.dashboard_link ?? '',
     profile_link: payload.profile_link ?? '',

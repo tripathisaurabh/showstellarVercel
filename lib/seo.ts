@@ -1,4 +1,4 @@
-const DEFAULT_SITE_URL = 'https://www.showstellar.in'
+const DEFAULT_SITE_URL = 'https://www.showstellar.com'
 const DEV_FALLBACK_SITE_URL = 'http://localhost:3000'
 let warnedMissingSiteUrl = false
 
@@ -10,7 +10,7 @@ function normalizeSiteUrl(value: string) {
 
     if (hostname === 'showstellar.com' || hostname === 'www.showstellar.com' || hostname === 'showstellar.in' || hostname === 'www.showstellar.in') {
       url.protocol = 'https:'
-      url.hostname = 'www.showstellar.in'
+      url.hostname = 'www.showstellar.com'
       url.port = ''
       return url.toString().replace(/\/+$/, '')
     }
@@ -31,7 +31,7 @@ export function getSiteUrl() {
   if (process.env.NODE_ENV === 'production') {
     if (!warnedMissingSiteUrl) {
       warnedMissingSiteUrl = true
-      console.warn('[ShowStellar] NEXT_PUBLIC_SITE_URL is missing in production; falling back to https://www.showstellar.in for generated URLs.')
+      console.warn('[ShowStellar] NEXT_PUBLIC_SITE_URL is missing in production; falling back to https://www.showstellar.com for generated URLs.')
     }
   }
 

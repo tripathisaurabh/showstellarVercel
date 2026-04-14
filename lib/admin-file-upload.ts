@@ -8,6 +8,7 @@ export const ADMIN_ALLOWED_MEDIA_MIME_TYPES = new Set([
   'image/jpeg',
   'image/png',
   'image/webp',
+  'image/gif',
   'video/mp4',
   'video/webm',
   'video/quicktime',
@@ -26,6 +27,7 @@ export function getSafeFileExtension(file: FileLike) {
   if (file.type === 'image/jpeg') return 'jpg'
   if (file.type === 'image/png') return 'png'
   if (file.type === 'image/webp') return 'webp'
+  if (file.type === 'image/gif') return 'gif'
   if (file.type === 'video/mp4') return 'mp4'
   if (file.type === 'video/webm') return 'webm'
   if (file.type === 'video/quicktime') return 'mov'
@@ -50,7 +52,7 @@ export function getAdminFileTypeError(file: FileLike, kind: 'image' | 'media') {
   }
 
   if (kind === 'media' && !ADMIN_ALLOWED_MEDIA_MIME_TYPES.has(file.type)) {
-    return 'Please upload a JPG, PNG, WebP, MP4, WebM, or MOV file.'
+    return 'Please upload a JPG, PNG, WebP, GIF, MP4, WebM, or MOV file.'
   }
 
   const maxSize = kind === 'image' ? ADMIN_PROFILE_IMAGE_MAX_SIZE_MB : ADMIN_MEDIA_MAX_SIZE_MB
