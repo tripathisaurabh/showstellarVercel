@@ -20,6 +20,10 @@ type FileLike = {
   size: number
 }
 
+function getFileLabel(file: FileLike) {
+  return file.name?.trim() || 'This file'
+}
+
 export function getSafeFileExtension(file: FileLike) {
   const rawExt = file.name.split('.').pop()?.trim().toLowerCase()
   if (rawExt && rawExt.length <= 5) return rawExt
@@ -48,16 +52,16 @@ export function buildAdminStoragePath(prefix: string, artistId: string, file: Fi
 
 export function getAdminFileTypeError(file: FileLike, kind: 'image' | 'media') {
   if (kind === 'image' && !ADMIN_ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
-    return 'Please upload a JPG, PNG, or WebP image.'
+    return `${getFileLabel(file)} is not a supported image format. Please upload JPG/JPEG, PNG, or WebP.`
   }
 
   if (kind === 'media' && !ADMIN_ALLOWED_MEDIA_MIME_TYPES.has(file.type)) {
-    return 'Please upload a JPG, PNG, WebP, GIF, MP4, WebM, or MOV file.'
+    return `${getFileLabel(file)} is not a supported media format. Please upload JPG/JPEG, PNG, WebP, GIF, MP4, WebM, or MOV.`
   }
 
   const maxSize = kind === 'image' ? ADMIN_PROFILE_IMAGE_MAX_SIZE_MB : ADMIN_MEDIA_MAX_SIZE_MB
   if (file.size > maxSize * 1024 * 1024) {
-    return `File must be ${maxSize}MB or smaller.`
+    return `${getFileLabel(file)} is too large. Maximum allowed size is ${maxSize}MB.`
   }
 
   return null

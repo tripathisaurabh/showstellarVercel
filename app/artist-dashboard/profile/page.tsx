@@ -92,17 +92,19 @@ export default function ProfileEditorPage() {
   }
 
   function getFileTypeError(file: File, kind: 'image' | 'media') {
+    const fileLabel = file.name?.trim() || 'This file'
+
     if (kind === 'image' && !allowedImageMimeTypes.has(file.type)) {
-      return 'Please upload a JPG, PNG, or WebP image.'
+      return `${fileLabel} is not a supported image format. Please upload JPG/JPEG, PNG, or WebP.`
     }
 
     if (kind === 'media' && !allowedGalleryImageMimeTypes.has(file.type) && !allowedVideoMimeTypes.has(file.type)) {
-      return 'Please upload a JPG, PNG, WebP, GIF, MP4, WebM, or MOV file.'
+      return `${fileLabel} is not a supported media format. Please upload JPG/JPEG, PNG, WebP, GIF, MP4, WebM, or MOV.`
     }
 
     const maxSize = kind === 'image' ? MAX_PROFILE_IMAGE_SIZE_MB : MAX_MEDIA_SIZE_MB
     if (file.size > maxSize * 1024 * 1024) {
-      return `File must be ${maxSize}MB or smaller.`
+      return `${fileLabel} is too large. Maximum allowed size is ${maxSize}MB.`
     }
 
     return null
@@ -450,7 +452,7 @@ export default function ProfileEditorPage() {
                   Upload Photo
                 </button>
                 <p className="text-xs mt-2 leading-6" style={{ color: 'var(--muted)' }}>
-                  JPG, PNG, or WebP up to {MAX_PROFILE_IMAGE_SIZE_MB}MB. A 4:5 crop will be prepared before upload.
+                  JPG/JPEG, PNG, or WebP up to {MAX_PROFILE_IMAGE_SIZE_MB}MB. A 4:5 crop will be prepared before upload.
                 </p>
               </div>
             </div>
@@ -691,7 +693,7 @@ export default function ProfileEditorPage() {
             {uploadingMedia ? 'Uploading…' : mediaLimitReached ? 'Media limit reached' : 'Upload Photos / Videos'}
           </button>
           <p className="mt-3 text-xs leading-6" style={{ color: 'var(--muted)' }}>
-            Gallery uploads support JPG, PNG, WebP, GIF, MP4, WebM, and MOV files up to {MAX_MEDIA_SIZE_MB}MB. Up to {MAX_ARTIST_MEDIA_ITEMS} media items total.
+            Gallery uploads support JPG/JPEG, PNG, WebP, GIF, MP4, WebM, and MOV files up to {MAX_MEDIA_SIZE_MB}MB. Up to {MAX_ARTIST_MEDIA_ITEMS} media items total.
           </p>
         </div>
 
