@@ -25,8 +25,14 @@ export async function DELETE(
 
   const adminClient = getAdminSupabaseClient()
 
-  const { data: profile, error: profileError } = await adminClient
-    .from('artist_profiles')
+  const { data: profile, error: profileError } = await (adminClient
+    .from('artist_profiles') as unknown as {
+    select(columns: string): {
+      eq(column: string, value: string): {
+        maybeSingle(): Promise<{ data: { id: string } | null; error: { message?: string } | null }>
+      }
+    }
+  })
     .select('id')
     .eq('user_id', user.id)
     .maybeSingle()

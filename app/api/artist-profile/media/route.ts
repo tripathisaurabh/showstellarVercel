@@ -23,8 +23,14 @@ export async function POST(request: Request) {
 
   const adminClient = getAdminSupabaseClient()
 
-  const { data: profile, error: profileError } = await adminClient
-    .from('artist_profiles')
+  const { data: profile, error: profileError } = await (adminClient
+    .from('artist_profiles') as unknown as {
+    select(columns: string): {
+      eq(column: string, value: string): {
+        maybeSingle(): Promise<{ data: { id: string; user_id: string } | null; error: { message?: string } | null }>
+      }
+    }
+  })
     .select('id, user_id')
     .eq('user_id', user.id)
     .maybeSingle()
