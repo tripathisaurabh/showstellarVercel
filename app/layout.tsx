@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter, Plus_Jakarta_Sans } from 'next/font/google'
+import { Analytics } from '@vercel/analytics/react'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import './globals.css'
 import Navbar from '@/components/Navbar'
 import { absoluteUrl, getSiteUrl, seoDefaults } from '@/lib/seo'
@@ -69,6 +71,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full flex flex-col">
         <Navbar />
         <main className="flex-1">{children}</main>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   )
