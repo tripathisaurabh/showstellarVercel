@@ -4,6 +4,8 @@ import { absoluteUrl } from '@/lib/seo'
 import type { PublicArtistRecord } from '@/lib/artist-profile'
 import { collectSeoCityCategoryRoutes, isArtistSeoIndexable } from '@/lib/seo-pages'
 
+export const revalidate = 3600
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: absoluteUrl('/'), lastModified: new Date() },
@@ -20,7 +22,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const supabase = getAdminSupabaseClient()
     const { data } = await supabase
       .from('artist_profiles')
-      .select('slug, id, created_at, stage_name, bio, profile_image, profile_image_cropped, profile_image_original, rating, experience_years, city, locality, state, categories, custom_categories, artist_media(id, media_url, type), users(full_name), primary_category:categories(name)')
+      .select('slug, id, created_at, approval_status, stage_name, bio, profile_image, profile_image_cropped, profile_image_original, rating, experience_years, city, locality, state, categories, custom_categories, artist_media(id, media_url, type), users(full_name), primary_category:categories(name)')
       .eq('approval_status', 'approved')
 
     const approvedArtists = (data ?? []) as PublicArtistRecord[]
@@ -39,7 +41,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }))
 
     return [...staticRoutes, ...artistRoutes, ...cityCategoryRoutes]
-  } catch {
+  } catch (error) {
+    console.error('[ShowStellar] Failed to build dynamic sitemap routes', error)
     return staticRoutes
   }
 }
