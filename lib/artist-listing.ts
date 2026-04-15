@@ -175,6 +175,13 @@ export function artistMatchesListingCategory(artist: PublicArtistRecord, categor
   )
 }
 
+function artistMatchesAnyListingCategory(artist: PublicArtistRecord, categories: MaybeString[]) {
+  const normalizedCategories = categories.map(normalizeArtistCategoryLabel).filter(category => trim(category))
+  if (normalizedCategories.length === 0) return true
+
+  return normalizedCategories.some(category => artistMatchesListingCategory(artist, category))
+}
+
 type ListingRow = {
   id: string
   slug?: MaybeString
@@ -354,9 +361,15 @@ export async function fetchPaginatedArtistListings(
     return { items: [], total: 0, page, limit, totalPages: 0, hasMore: false }
   }
 
+  const postFilterCategories = (filters.categoryValues ?? []).length > 0
+    ? filters.categoryValues ?? []
+    : filters.category
+      ? [filters.category]
+      : []
+
   const items = ((data ?? []) as ListingRow[])
     .map(mapListingRowToArtist)
-    .filter(artist => artistMatchesListingCategory(artist, filters.category))
+    .filter(artist => artistMatchesAnyListingCategory(artist, postFilterCategories))
 
   const total = count ?? items.length
   const totalPages = total > 0 ? Math.max(1, Math.ceil(total / limit)) : 0
