@@ -1,6 +1,16 @@
+'use client'
+
+import dynamic from 'next/dynamic'
 import type { EmailTemplateData, EmailTemplateDefinition } from '@/lib/email-center/types'
-import TemplateFields from '@/components/email-center/TemplateFields'
 import SendStatus from '@/components/email-center/SendStatus'
+
+const TemplateFields = dynamic(() => import('@/components/email-center/TemplateFields'), {
+  loading: () => (
+    <div className="rounded-2xl border border-dashed px-4 py-5 text-sm" style={{ borderColor: 'rgba(0, 23, 57, 0.12)', color: 'var(--muted)', background: 'rgba(255,255,255,0.7)' }}>
+      Loading template fields…
+    </div>
+  ),
+})
 
 type EmailFormProps = {
   templates: EmailTemplateDefinition[]

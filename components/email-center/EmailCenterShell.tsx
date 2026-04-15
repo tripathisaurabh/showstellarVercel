@@ -1,10 +1,10 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { startTransition, useDeferredValue, useEffect, useRef, useState, useTransition } from 'react'
 import { ArrowLeft, Sparkles } from 'lucide-react'
 import EmailForm from '@/components/email-center/EmailForm'
-import EmailPreview from '@/components/email-center/EmailPreview'
 import { emailTemplates, getEmailTemplateByKey } from '@/lib/email-center/template-registry'
 import {
   getInitialTemplateData,
@@ -13,15 +13,32 @@ import {
 } from '@/lib/email-center/utils'
 import type { EmailTemplateData } from '@/lib/email-center/types'
 import { buildArtistEmailCenterSeed } from '@/lib/email/artist-communication'
-import type { AdminArtistDetailData } from '@/lib/admin-dashboard'
+import type { AdminEmailArtistSeed } from '@/lib/admin-dashboard'
 
 type EmailCenterShellProps = {
   adminEmail: string
-  selectedArtist?: AdminArtistDetailData['artist'] | null
+  selectedArtist?: AdminEmailArtistSeed | null
   initialTemplateKey?: string
 }
 
 const DEFAULT_TEMPLATE = emailTemplates[0]
+
+const EmailPreview = dynamic(() => import('@/components/email-center/EmailPreview'), {
+  ssr: false,
+  loading: () => (
+    <div
+      className="min-h-[520px] overflow-hidden rounded-[28px] border bg-white p-5 shadow-[0_24px_80px_rgba(0,23,57,0.08)]"
+      style={{ borderColor: 'rgba(0, 23, 57, 0.10)' }}
+    >
+      <div className="h-4 w-32 rounded-full bg-[var(--surface-2)] shimmer" />
+      <div className="mt-6 space-y-3">
+        <div className="h-3 w-4/5 rounded-full bg-[var(--surface-2)] shimmer" />
+        <div className="h-3 w-3/5 rounded-full bg-[var(--surface-2)] shimmer" />
+        <div className="h-80 rounded-[24px] bg-[var(--surface-2)] shimmer" />
+      </div>
+    </div>
+  ),
+})
 
 export default function EmailCenterShell({
   adminEmail,

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { unstable_cache } from 'next/cache'
 import { redirect } from 'next/navigation'
 import Footer from '@/components/Footer'
 import ArtistFilters from '@/components/ArtistFilters'
@@ -18,8 +19,9 @@ import {
   normalizeArtistListingPage,
 } from '@/lib/artist-listing'
 import type { PublicArtistRecord } from '@/lib/artist-profile'
-import { artistMatchesCategory, normalizeArtistCategoryLabel } from '@/lib/artist-categories'
+import { normalizeArtistCategoryLabel } from '@/lib/artist-categories'
 import { absoluteUrl, seoDefaults } from '@/lib/seo'
+import { getAdminSupabaseClient } from '@/lib/supabase/admin'
 
 type BrowseSearchParams = {
   category?: string
@@ -116,6 +118,28 @@ function buildArtistsPageDescription(category?: string | null, city?: string | n
   return seoDefaults.description
 }
 
+const getCachedPublicCategoryNames = unstable_cache(
+  async (): Promise<string[]> => {
+    const adminClient = getAdminSupabaseClient()
+    const { data, error } = await adminClient
+      .from('categories')
+      .select('name')
+      .order('name')
+
+    if (error) {
+      console.error('[artists-page] category options lookup failed:', error)
+      return []
+    }
+
+    const rows = (data ?? []) as Array<{ name: string | null }>
+    return rows
+      .map(row => row.name?.trim())
+      .filter((name): name is string => Boolean(name))
+  },
+  ['artists-page-category-options-v1'],
+  { revalidate: 3600, tags: ['public-categories'] }
+)
+
 export async function generateMetadata({ searchParams }: { searchParams: Promise<BrowseSearchParams> }): Promise<Metadata> {
   const params = await searchParams
   const page = normalizeArtistListingPage(params.page)
@@ -166,7 +190,7 @@ export default async function BrowseArtistsPage({ searchParams }: { searchParams
     const supabase = await createClient()
     const canonicalCategory = normalizeArtistCategoryLabel(category)
 
-    const [listing, categoriesResult] = await Promise.all([
+    const [listing, cachedCategoryNames] = await Promise.all([
       fetchPaginatedArtistListings(supabase, {
         page,
         limit: DEFAULT_ARTIST_LISTING_LIMIT,
@@ -176,7 +200,7 @@ export default async function BrowseArtistsPage({ searchParams }: { searchParams
         q: query,
         sort: 'newest',
       }),
-      supabase.from('categories').select('name').order('name'),
+      getCachedPublicCategoryNames(),
     ])
 
     if (listing.totalPages > 0 && page > listing.totalPages) {
@@ -185,15 +209,13 @@ export default async function BrowseArtistsPage({ searchParams }: { searchParams
     }
 
     items = listing.items
-      .filter(artist => artistMatchesCategory(artist, canonicalCategory || category))
 
     total = listing.total
     totalPages = listing.totalPages
 
-    const categoryRows = (categoriesResult.data ?? []) as Array<{ name: string }>
     categoryOptions = Array.from(
       new Set([
-        ...categoryRows.map(c => c.name),
+        ...cachedCategoryNames,
         ...items.flatMap(artist => [...(artist.categories ?? []), ...(artist.custom_categories ?? [])].filter(Boolean) as string[]),
       ])
     ).sort((a, b) => a.localeCompare(b))

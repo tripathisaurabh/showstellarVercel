@@ -9,7 +9,10 @@ const CITY_STORAGE_KEY = 'ss_city'
 // Pure fetch — returns data, never calls setState
 async function fetchCityArtists(cityName: string): Promise<FeaturedArtistSlot[] | null> {
   try {
-    const res = await fetch(`/api/featured-artists?city=${encodeURIComponent(cityName)}`)
+    const res = await fetch(
+      `/api/featured-artists?city=${encodeURIComponent(cityName)}`,
+      { signal: AbortSignal.timeout(5000) }
+    )
     if (!res.ok) return null
     const data = await res.json() as { artists?: FeaturedArtistSlot[] }
     return data.artists ?? []
@@ -41,40 +44,67 @@ export default function LocationAwareFeatured({ initialArtists }: Props) {
 
   useEffect(() => {
     let active = true
+    let timeoutId: number | null = null
+    let idleId: number | null = null
+    const callbackWindow = window as Window & {
+      requestIdleCallback?: (cb: IdleRequestCallback, options?: IdleRequestOptions) => number
+      cancelIdleCallback?: (id: number) => void
+    }
+
+    async function applyCity(cityName: string) {
+      const result = await fetchCityArtists(cityName)
+      if (!active || !result) return
+      setArtists(result)
+      setCity(cityName)
+    }
 
     async function init() {
       // 1. Previously saved city → instant, no permission prompt
       const saved = localStorage.getItem(CITY_STORAGE_KEY)
       if (saved) {
-        const result = await fetchCityArtists(saved)
-        if (active && result) {
-          setArtists(result)
-          setCity(saved)
-        }
+        await applyCity(saved)
         return
       }
 
-      // 2. Browser geolocation → reverse-geocode → fetch
+      // 2. Browser geolocation (deferred until idle) → reverse-geocode → fetch
       if (!('geolocation' in navigator)) return
-      navigator.geolocation.getCurrentPosition(
-        async pos => {
-          if (!active) return
-          const detected = await reverseGeocode(pos.coords.latitude, pos.coords.longitude)
-          if (!detected || !active) return
-          localStorage.setItem(CITY_STORAGE_KEY, detected)
-          const result = await fetchCityArtists(detected)
-          if (active && result) {
-            setArtists(result)
-            setCity(detected)
-          }
-        },
-        () => { /* denied — keep initial */ },
-        { timeout: 6000 }
-      )
+
+      const runGeolocation = () => {
+        navigator.geolocation.getCurrentPosition(
+          async pos => {
+            if (!active) return
+            const detected = await reverseGeocode(pos.coords.latitude, pos.coords.longitude)
+            if (!detected || !active) return
+            localStorage.setItem(CITY_STORAGE_KEY, detected)
+            await applyCity(detected)
+          },
+          () => { /* denied — keep initial */ },
+          { timeout: 6000 }
+        )
+      }
+
+      if (typeof callbackWindow.requestIdleCallback === 'function') {
+        idleId = callbackWindow.requestIdleCallback(() => {
+          void runGeolocation()
+        }, { timeout: 2200 })
+        return
+      }
+
+      timeoutId = window.setTimeout(() => {
+        void runGeolocation()
+      }, 1200)
     }
 
     void init()
-    return () => { active = false }
+    return () => {
+      active = false
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId)
+      }
+      if (idleId !== null && typeof callbackWindow.cancelIdleCallback === 'function') {
+        callbackWindow.cancelIdleCallback(idleId)
+      }
+    }
   }, [])
 
   if (artists.length === 0) return null

@@ -66,6 +66,14 @@ function splitFilterTerms(value?: MaybeString) {
     .filter(Boolean)
 }
 
+function toPostgrestArrayContainsLiteral(value: string) {
+  const escaped = value
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+
+  return `{"${escaped}"}`
+}
+
 export function normalizeArtistListingPage(value?: string | number | null) {
   const raw = typeof value === 'string' ? Number(value) : value
   if (!Number.isFinite(Number(raw)) || Number(raw) < 1) return 1
@@ -252,7 +260,10 @@ function applyListingFilters(
   if (categoryFilters.length > 0) {
     query = query.or(
       categoryFilters
-        .map(value => `categories.cs.{${value}},custom_categories.cs.{${value}}`)
+        .map(value => {
+          const literal = toPostgrestArrayContainsLiteral(value)
+          return `categories.cs.${literal},custom_categories.cs.${literal}`
+        })
         .join(',')
     )
   }
@@ -267,9 +278,15 @@ function applyListingFilters(
       `state.ilike.%${q}%`,
       `preferred_working_locations.ilike.%${q}%`,
       `slug.ilike.%${q}%`,
-      `categories.cs.{${qCategory}}`,
-      `custom_categories.cs.{${qCategory}}`,
     ]
+
+    if (qCategory) {
+      const qCategoryLiteral = toPostgrestArrayContainsLiteral(qCategory)
+      textFilters.push(
+        `categories.cs.${qCategoryLiteral}`,
+        `custom_categories.cs.${qCategoryLiteral}`
+      )
+    }
 
     query = query.or(textFilters.join(','))
   }

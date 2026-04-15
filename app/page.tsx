@@ -1,20 +1,24 @@
 import type { Metadata } from 'next'
+import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import Link from 'next/link'
+import { unstable_cache } from 'next/cache'
 import type { ReactNode } from 'react'
-import { createClient } from '@/lib/supabase/server'
-import { hasPublicSupabaseConfig } from '@/lib/supabase/config'
 import {
   ArrowRight,
   CheckCircle2,
   Star,
 } from 'lucide-react'
 import Footer from '@/components/Footer'
-import LocationAwareFeatured from '@/components/LocationAwareFeatured'
 import { type FeaturedArtistSlot } from '@/components/FeaturedCarousel'
 import { getArtistDisplayName, getArtistLocation, getArtistPublicPath, getArtistCategories, type PublicArtistRecord } from '@/lib/artist-profile'
 import { StepsCarousel } from '@/components/StepsCarousel'
 import { absoluteUrl, seoDefaults } from '@/lib/seo'
+import { getAdminSupabaseClient } from '@/lib/supabase/admin'
+
+const LocationAwareFeatured = dynamic(() => import('@/components/LocationAwareFeatured'), {
+  loading: () => null,
+})
 
 const categories = [
   {
@@ -88,6 +92,46 @@ const steps = [
 
 const trustPoints = ['Verified profiles', 'Direct artist inquiry', 'Premium event talent']
 
+const getCachedFeaturedArtistSlots = unstable_cache(
+  async (): Promise<FeaturedArtistSlot[]> => {
+    const supabase = getAdminSupabaseClient()
+    const { data: featured, error } = await supabase
+      .from('artist_profiles')
+      .select('id, slug, stage_name, locality, city, state, bio, pricing_start, profile_image, profile_image_cropped, is_featured, rating, experience_years, approval_status, users(full_name), primary_category:categories(name), categories, custom_categories')
+      .eq('approval_status', 'approved')
+      .eq('is_featured', true)
+      .limit(12)
+
+    if (error) {
+      console.error('[homepage] featured artists lookup failed:', error)
+      return []
+    }
+
+    const featuredArtists = [...((featured ?? []) as PublicArtistRecord[])].sort((a, b) => {
+      const aR = a.rating != null ? Number(a.rating) : -1
+      const bR = b.rating != null ? Number(b.rating) : -1
+      if (aR !== bR) return bR - aR
+      const aE = a.experience_years != null ? Number(a.experience_years) : -1
+      const bE = b.experience_years != null ? Number(b.experience_years) : -1
+      return bE - aE
+    })
+
+    return featuredArtists.map(artist => ({
+      href: getArtistPublicPath(artist),
+      displayName: getArtistDisplayName(artist),
+      categories: getArtistCategories(artist).combined,
+      location: getArtistLocation(artist) || null,
+      profileImage: artist.profile_image_cropped ?? artist.profile_image ?? null,
+      pricingStart: artist.pricing_start != null ? Number(artist.pricing_start) : null,
+      bio: artist.bio ?? null,
+      isFeatured: !!artist.is_featured,
+      experienceYears: artist.experience_years != null ? Number(artist.experience_years) : null,
+    }))
+  },
+  ['homepage-featured-artists-v1'],
+  { revalidate: 300, tags: ['public-featured-artists'] }
+)
+
 export const metadata: Metadata = {
   title: {
     absolute: seoDefaults.title,
@@ -113,38 +157,7 @@ export const metadata: Metadata = {
 }
 
 export default async function HomePage() {
-  const rawArtists: PublicArtistRecord[] = []
-
-  if (hasPublicSupabaseConfig()) {
-    const supabase = await createClient()
-    const { data: featured } = await supabase
-      .from('artist_profiles')
-      .select('*, users(full_name), primary_category:categories(name), categories, custom_categories')
-      .eq('approval_status', 'approved')
-      .eq('is_featured', true)
-      .limit(12)
-    rawArtists.push(...((featured ?? []) as PublicArtistRecord[]))
-  }
-  // Sort server-side: rating desc, then experience desc (nulls last)
-  const featuredArtists = [...rawArtists].sort((a, b) => {
-    const aR = a.rating != null ? Number(a.rating) : -1
-    const bR = b.rating != null ? Number(b.rating) : -1
-    if (aR !== bR) return bR - aR
-    const aE = a.experience_years != null ? Number(a.experience_years) : -1
-    const bE = b.experience_years != null ? Number(b.experience_years) : -1
-    return bE - aE
-  })
-  const featuredSlots: FeaturedArtistSlot[] = featuredArtists.map(artist => ({
-    href: getArtistPublicPath(artist),
-    displayName: getArtistDisplayName(artist),
-    categories: getArtistCategories(artist).combined,
-    location: getArtistLocation(artist) || null,
-    profileImage: artist.profile_image_cropped ?? artist.profile_image ?? null,
-    pricingStart: artist.pricing_start != null ? Number(artist.pricing_start) : null,
-    bio: artist.bio ?? null,
-    isFeatured: !!artist.is_featured,
-    experienceYears: artist.experience_years != null ? Number(artist.experience_years) : null,
-  }))
+  const featuredSlots = await getCachedFeaturedArtistSlots()
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">

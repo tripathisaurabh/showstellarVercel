@@ -194,6 +194,14 @@ export type AdminInquiryDetailData = {
   }
 }
 
+export type AdminEmailArtistSeed = AdminArtistCard & {
+  media: Array<{
+    id: string
+    media_url: string
+    type: 'image' | 'video'
+  }>
+}
+
 type VerificationMap = Map<string, AuthUserRecord>
 
 async function fetchVerificationMap(adminClient: ReturnType<typeof getAdminSupabaseClient>) {
@@ -320,9 +328,9 @@ function buildInquiryCard(
 
 export async function loadAdminDashboardData() {
   const adminClient = getAdminSupabaseClient()
-  const verificationMap = await fetchVerificationMap(adminClient)
 
-  const [artistsResult, inquiriesResult] = await Promise.all([
+  const [verificationMap, artistsResult, inquiriesResult] = await Promise.all([
+    fetchVerificationMap(adminClient),
     adminClient
       .from('artist_profiles')
       .select('id, slug, stage_name, category_id, locality, city, state, preferred_working_locations, bio, performance_style, event_types, languages_spoken, pricing_start, profile_image, profile_image_cropped, profile_image_original, is_featured, approval_status, created_at, users(id, full_name, phone_number, email, created_at), primary_category:categories(name), categories, custom_categories, artist_media(id)')
@@ -384,31 +392,32 @@ export async function loadAdminDashboardData() {
 
 export async function loadAdminArtistDetail(artistId: string) {
   const adminClient = getAdminSupabaseClient()
-  const verificationMap = await fetchVerificationMap(adminClient)
 
-  const { data: artistData, error: artistError } = await adminClient
-    .from('artist_profiles')
-    .select('id, slug, stage_name, category_id, locality, city, state, preferred_working_locations, bio, performance_style, event_types, languages_spoken, pricing_start, profile_image, profile_image_cropped, profile_image_original, is_featured, approval_status, created_at, users(id, full_name, phone_number, email, created_at), primary_category:categories(name), categories, custom_categories, artist_media(id, media_url, type)')
-    .eq('id', artistId)
-    .maybeSingle()
+  const [verificationMap, artistResult, inquiriesResult] = await Promise.all([
+    fetchVerificationMap(adminClient),
+    adminClient
+      .from('artist_profiles')
+      .select('id, slug, stage_name, category_id, locality, city, state, preferred_working_locations, bio, performance_style, event_types, languages_spoken, pricing_start, profile_image, profile_image_cropped, profile_image_original, is_featured, approval_status, created_at, users(id, full_name, phone_number, email, created_at), primary_category:categories(name), categories, custom_categories, artist_media(id, media_url, type)')
+      .eq('id', artistId)
+      .maybeSingle(),
+    adminClient
+      .from('booking_inquiries')
+      .select('id, artist_id, client_name, client_phone, client_email, event_type, custom_event_type, event_size, event_duration, venue_type, event_date, city, artist_price, client_offer, additional_details, budget, message, status, created_at, artist_profiles(id, slug, stage_name, pricing_start, approval_status, is_featured, city, preferred_working_locations, profile_image, profile_image_cropped, profile_image_original, created_at, users(id, full_name, phone_number, email, created_at), primary_category:categories(name), categories, custom_categories)')
+      .eq('artist_id', artistId)
+      .order('created_at', { ascending: false }),
+  ])
 
-  if (artistError) {
-    throw artistError
-  }
+  const { data: artistData, error: artistError } = artistResult
+
+  if (artistError) throw artistError
 
   if (!artistData) {
     return null
   }
 
-  const { data: inquiriesData, error: inquiriesError } = await adminClient
-    .from('booking_inquiries')
-    .select('id, artist_id, client_name, client_phone, client_email, event_type, custom_event_type, event_size, event_duration, venue_type, event_date, city, artist_price, client_offer, additional_details, budget, message, status, created_at, artist_profiles(id, slug, stage_name, pricing_start, approval_status, is_featured, city, preferred_working_locations, profile_image, profile_image_cropped, profile_image_original, created_at, users(id, full_name, phone_number, email, created_at), primary_category:categories(name), categories, custom_categories)')
-    .eq('artist_id', artistId)
-    .order('created_at', { ascending: false })
+  const { data: inquiriesData, error: inquiriesError } = inquiriesResult
 
-  if (inquiriesError) {
-    throw inquiriesError
-  }
+  if (inquiriesError) throw inquiriesError
 
   const artist = buildArtistCard(artistData as AdminArtistRow, verificationMap, new Map())
   const inquiries = (inquiriesData ?? []).map(row => buildInquiryCard(row as AdminInquiryRow, verificationMap))
@@ -425,17 +434,18 @@ export async function loadAdminArtistDetail(artistId: string) {
 
 export async function loadAdminInquiryDetail(inquiryId: string) {
   const adminClient = getAdminSupabaseClient()
-  const verificationMap = await fetchVerificationMap(adminClient)
 
-  const { data: inquiryData, error } = await adminClient
-    .from('booking_inquiries')
-    .select('id, artist_id, client_name, client_phone, client_email, event_type, custom_event_type, event_size, event_duration, venue_type, event_date, city, artist_price, client_offer, additional_details, budget, message, status, created_at, artist_profiles(id, slug, stage_name, pricing_start, approval_status, is_featured, city, preferred_working_locations, profile_image, profile_image_cropped, profile_image_original, created_at, users(id, full_name, phone_number, email, created_at), primary_category:categories(name), categories, custom_categories, artist_media(id, media_url, type))')
-    .eq('id', inquiryId)
-    .maybeSingle()
+  const [verificationMap, inquiryResult] = await Promise.all([
+    fetchVerificationMap(adminClient),
+    adminClient
+      .from('booking_inquiries')
+      .select('id, artist_id, client_name, client_phone, client_email, event_type, custom_event_type, event_size, event_duration, venue_type, event_date, city, artist_price, client_offer, additional_details, budget, message, status, created_at, artist_profiles(id, slug, stage_name, pricing_start, approval_status, is_featured, city, preferred_working_locations, profile_image, profile_image_cropped, profile_image_original, created_at, users(id, full_name, phone_number, email, created_at), primary_category:categories(name), categories, custom_categories, artist_media(id, media_url, type))')
+      .eq('id', inquiryId)
+      .maybeSingle(),
+  ])
+  const { data: inquiryData, error } = inquiryResult
 
-  if (error) {
-    throw error
-  }
+  if (error) throw error
 
   if (!inquiryData) {
     return null
@@ -459,6 +469,26 @@ export async function loadAdminInquiryDetail(inquiryId: string) {
       },
     },
   } satisfies AdminInquiryDetailData
+}
+
+export async function loadAdminArtistEmailSeed(artistId: string) {
+  const adminClient = getAdminSupabaseClient()
+  const { data, error } = await adminClient
+    .from('artist_profiles')
+    .select('id, slug, stage_name, category_id, locality, city, state, preferred_working_locations, bio, performance_style, event_types, languages_spoken, pricing_start, profile_image, profile_image_cropped, profile_image_original, is_featured, approval_status, created_at, users(id, full_name, phone_number, email, created_at), primary_category:categories(name), categories, custom_categories, artist_media(id, media_url, type)')
+    .eq('id', artistId)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data) return null
+
+  const artistRow = data as AdminArtistRow
+  const artist = buildArtistCard(artistRow, new Map(), new Map())
+
+  return {
+    ...artist,
+    media: artistRow.artist_media ?? [],
+  } satisfies AdminEmailArtistSeed
 }
 
 export function filterAdminArtists(

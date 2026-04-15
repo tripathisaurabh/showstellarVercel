@@ -3,11 +3,12 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { headers } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { hasPublicSupabaseConfig } from '@/lib/supabase/config'
 import BookingModal from '@/components/DeferredBookingModal'
+import DeferredMediaGalleryLightbox from '@/components/DeferredMediaGalleryLightbox'
 import Footer from '@/components/Footer'
-import MediaGalleryLightbox from '@/components/MediaGalleryLightbox'
 import ShareArtistButton from '@/components/ShareArtistButton'
 import { ChevronRight, MapPin, Star } from 'lucide-react'
 import {
@@ -35,10 +36,19 @@ import {
 } from '@/lib/seo-pages'
 import { getSiteUrl } from '@/lib/seo'
 
+type ArtistMediaItem = {
+  id: string
+  media_url: string
+  type: 'image' | 'video'
+}
+
+const ARTIST_PROFILE_SELECT =
+  'id, slug, stage_name, locality, city, state, preferred_working_locations, bio, performance_style, event_types, languages_spoken, pricing_start, profile_image, profile_image_cropped, profile_image_original, is_featured, approval_status, rating, experience_years, users(full_name, phone_number, email), primary_category:categories(name), categories, custom_categories, artist_media(id, media_url, type)'
+
 async function loadArtistBySlug(supabase: Awaited<ReturnType<typeof createClient>>, slug: string) {
   const baseQuery = supabase
     .from('artist_profiles')
-    .select('*, users(full_name, phone_number, email), primary_category:categories(name), categories, custom_categories, artist_media(*)')
+    .select(ARTIST_PROFILE_SELECT)
     .eq('approval_status', 'approved')
 
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug)
@@ -67,6 +77,12 @@ async function loadArtistBySlug(supabase: Awaited<ReturnType<typeof createClient
   return artist
 }
 
+const getArtistBySlug = cache(async (slug: string) => {
+  if (!hasPublicSupabaseConfig()) return null
+  const supabase = await createClient()
+  return loadArtistBySlug(supabase, slug)
+})
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params
   if (!hasPublicSupabaseConfig()) {
@@ -76,8 +92,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     }
   }
 
-  const supabase = await createClient()
-  const artist = await loadArtistBySlug(supabase, slug)
+  const artist = await getArtistBySlug(slug)
 
   if (!artist) {
     return {
@@ -95,8 +110,7 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
     notFound()
   }
 
-  const supabase = await createClient()
-  const artist = await loadArtistBySlug(supabase, slug)
+  const artist = await getArtistBySlug(slug)
 
   if (!artist) notFound()
 
@@ -118,9 +132,13 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
   const initials      = getArtistInitials(artist)
   const categoryData  = getArtistCategories(artist)
   const categoryName  = categoryData.primary
-  const media         = (artist.artist_media ?? []).filter(Boolean)
-  const images        = media.filter(m => m.type === 'image')
-  const videos        = media.filter(m => m.type === 'video')
+  const media = (artist.artist_media ?? []).filter((item): item is ArtistMediaItem => {
+    if (!item) return false
+    const mediaType = item.type
+    return Boolean(item.id && item.media_url && (mediaType === 'image' || mediaType === 'video'))
+  })
+  const images = media.filter((item): item is ArtistMediaItem => item.type === 'image')
+  const videos = media.filter((item): item is ArtistMediaItem => item.type === 'video')
   const eventTypes    = splitArtistTextList(artist.event_types)
   const languages     = splitArtistTextList(artist.languages_spoken)
   const bioParagraphs = splitArtistParagraphs(artist.bio)
@@ -188,9 +206,9 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
                 boxShadow: '0 4px 16px rgba(0,23,57,0.1)',
               }}
             >
-              {artist.profile_image ? (
+              {artist.profile_image_cropped || artist.profile_image ? (
                 <Image
-                  src={artist.profile_image}
+                  src={artist.profile_image_cropped ?? artist.profile_image ?? ''}
                   alt={displayName}
                   width={96}
                   height={96}
@@ -406,7 +424,7 @@ export default async function ArtistProfilePage({ params }: { params: Promise<{ 
                 <div style={{ padding: '28px 32px' }}>
                   <h2 className="text-base font-semibold mb-5" style={{ color: 'var(--foreground)' }}>Photos & Videos</h2>
 
-                  <MediaGalleryLightbox
+                  <DeferredMediaGalleryLightbox
                     displayName={displayName}
                     images={images}
                     videos={videos}

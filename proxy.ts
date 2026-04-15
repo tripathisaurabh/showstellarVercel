@@ -38,8 +38,15 @@ export async function proxy(request: NextRequest) {
     const { data: userData } = await supabase.from('users').select('role').eq('id', user.id).maybeSingle()
     userRole = userData?.role ?? null
 
-    const { data: profileData } = await supabase.from('artist_profiles').select('id').eq('user_id', user.id).maybeSingle()
-    hasArtistProfile = !!profileData?.id
+    const needsArtistProfile =
+      isArtistRoute ||
+      pathname === '/artist-login' ||
+      pathname === '/artist-signup'
+
+    if (needsArtistProfile && userRole !== 'artist') {
+      const { data: profileData } = await supabase.from('artist_profiles').select('id').eq('user_id', user.id).maybeSingle()
+      hasArtistProfile = !!profileData?.id
+    }
   }
 
   if (

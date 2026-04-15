@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { Suspense } from 'react'
 import {
   BadgeCheck,
   CheckCircle,
@@ -66,7 +67,6 @@ export default async function AdminPage({
 }) {
   const params = (await searchParams) ?? {}
   const activeTab = normalizeTab(params.tab)
-  const artistIdFilter = params.artistId?.trim() ?? ''
   const { user, adminClient, userRecord, isAdmin } = await getAdminSession()
 
   if (!user || !adminClient) {
@@ -77,22 +77,8 @@ export default async function AdminPage({
     redirect('/admin/login?reason=not-admin')
   }
 
-  const data = await loadAdminDashboardData()
-  const filteredAllArtists = filterAdminArtists(data.artists, params)
-  const filteredInquiries =
-    activeTab === 'inquiries' && artistIdFilter
-      ? data.inquiries.filter(inquiry => inquiry.artistId === artistIdFilter)
-      : data.inquiries
-
-  const pendingArtists = data.artists.filter(
-    artist => artist.approvalStatus !== 'approved' || !artist.emailVerified
-  )
-  const approvedArtists = data.artists.filter(artist => artist.approvalStatus === 'approved')
-  const draftRejectedArtists = data.artists.filter(
-    artist => artist.approvalStatus === 'draft' || artist.approvalStatus === 'rejected'
-  )
-
   const tabHref = (key: string) => `/admin${key === 'overview' ? '' : `?tab=${key}`}`
+  const adminEmail = userRecord?.email ?? user.email ?? ''
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--background)' }}>
@@ -112,7 +98,7 @@ export default async function AdminPage({
               </div>
               <div>
                 <div className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>
-                  {userRecord?.email ?? user.email}
+                  {adminEmail}
                 </div>
                 <div className="text-xs" style={{ color: 'var(--muted)' }}>
                   Administrator
@@ -130,7 +116,7 @@ export default async function AdminPage({
             Admin Panel
           </h1>
           <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-            ShowStellar Management · {userRecord?.email ?? user.email}
+            ShowStellar Management · {adminEmail}
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             <Link
@@ -180,111 +166,9 @@ export default async function AdminPage({
           })}
         </div>
 
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-          <StatCard label="Total Artists" value={data.metrics.totalArtists} icon={Users} />
-          <StatCard label="Approved Artists" value={data.metrics.approvedArtists} icon={CheckCircle} />
-          <StatCard label="Draft Artists" value={data.metrics.draftArtists} icon={Clock} accent />
-          <StatCard label="Rejected Artists" value={data.metrics.rejectedArtists} icon={ShieldAlert} danger />
-          <StatCard label="Unverified Artists" value={data.metrics.unverifiedArtists} icon={BadgeCheck} warning />
-          <StatCard label="Featured Artists" value={data.metrics.featuredArtists} icon={Star} featured />
-          <StatCard label="Total Booking Inquiries" value={data.metrics.totalBookingInquiries} icon={FileText} />
-          <StatCard label="New Inquiries" value={data.metrics.newInquiries} icon={Clock} warning />
-        </div>
-
-        {activeTab === 'overview' && (
-          <div className="space-y-10">
-            <Section title="Pending Review" count={pendingArtists.length} accent>
-              {pendingArtists.length === 0 ? (
-                <EmptyState message="No artists are waiting for review." />
-              ) : (
-                pendingArtists.map(artist => <AdminArtistCardRow key={artist.id} artist={artist} />)
-              )}
-            </Section>
-
-            <Section title="Approved Artists" count={approvedArtists.length}>
-              {approvedArtists.length === 0 ? (
-                <EmptyState message="No approved artists yet." />
-              ) : (
-                approvedArtists.map(artist => <AdminArtistCardRow key={artist.id} artist={artist} />)
-              )}
-            </Section>
-
-            <Section title="Booking Inquiries" count={filteredInquiries.length}>
-              {filteredInquiries.length === 0 ? (
-                <EmptyState message="No inquiries yet." />
-              ) : (
-                filteredInquiries.slice(0, 8).map(inquiry => (
-                  <AdminInquiryCardRow key={inquiry.id} inquiry={inquiry} />
-                ))
-              )}
-            </Section>
-          </div>
-        )}
-
-        {activeTab === 'all' && (
-          <div className="space-y-6">
-            <ArtistFiltersForm
-              categories={data.categories}
-              cities={data.cities}
-              params={params}
-            />
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-lg font-semibold" style={{ color: 'var(--foreground)' }}>
-                All Artists
-              </h2>
-              <span className="text-sm" style={{ color: 'var(--muted)' }}>
-                {filteredAllArtists.length} result{filteredAllArtists.length === 1 ? '' : 's'}
-              </span>
-            </div>
-            <div className="space-y-3">
-              {filteredAllArtists.length === 0 ? (
-                <EmptyState message="No artists match the current filters." />
-              ) : (
-                filteredAllArtists.map(artist => <AdminArtistCardRow key={artist.id} artist={artist} />)
-              )}
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'pending' && (
-          <Section title="Pending Review" count={pendingArtists.length} accent>
-            {pendingArtists.length === 0 ? (
-              <EmptyState message="No artists are waiting for review." />
-            ) : (
-              pendingArtists.map(artist => <AdminArtistCardRow key={artist.id} artist={artist} />)
-            )}
-          </Section>
-        )}
-
-        {activeTab === 'approved' && (
-          <Section title="Approved Artists" count={approvedArtists.length}>
-            {approvedArtists.length === 0 ? (
-              <EmptyState message="No approved artists yet." />
-            ) : (
-              approvedArtists.map(artist => <AdminArtistCardRow key={artist.id} artist={artist} />)
-            )}
-          </Section>
-        )}
-
-        {activeTab === 'draft' && (
-          <Section title="Draft / Rejected" count={draftRejectedArtists.length}>
-            {draftRejectedArtists.length === 0 ? (
-              <EmptyState message="No draft or rejected artists." />
-            ) : (
-              draftRejectedArtists.map(artist => <AdminArtistCardRow key={artist.id} artist={artist} />)
-            )}
-          </Section>
-        )}
-
-        {activeTab === 'inquiries' && (
-          <Section title="Booking Inquiries" count={filteredInquiries.length}>
-            {filteredInquiries.length === 0 ? (
-              <EmptyState message="No inquiries yet." />
-            ) : (
-              filteredInquiries.map(inquiry => <AdminInquiryCardRow key={inquiry.id} inquiry={inquiry} />)
-            )}
-          </Section>
-        )}
+        <Suspense fallback={<AdminDashboardContentFallback activeTab={activeTab} />}>
+          <AdminDashboardContent activeTab={activeTab} params={params} />
+        </Suspense>
       </div>
     </div>
   )
@@ -293,6 +177,172 @@ export default async function AdminPage({
 function normalizeTab(value?: string) {
   const allowed = new Set(TAB_DEFS.map(tab => tab.key))
   return value && allowed.has(value as (typeof TAB_DEFS)[number]['key']) ? value : 'overview'
+}
+
+async function AdminDashboardContent({
+  activeTab,
+  params,
+}: {
+  activeTab: string
+  params: AdminSearchParams
+}) {
+  const data = await loadAdminDashboardData()
+  const artistIdFilter = params.artistId?.trim() ?? ''
+  const filteredAllArtists = filterAdminArtists(data.artists, params)
+  const filteredInquiries =
+    activeTab === 'inquiries' && artistIdFilter
+      ? data.inquiries.filter(inquiry => inquiry.artistId === artistIdFilter)
+      : data.inquiries
+
+  const pendingArtists = data.artists.filter(
+    artist => artist.approvalStatus !== 'approved' || !artist.emailVerified
+  )
+  const approvedArtists = data.artists.filter(artist => artist.approvalStatus === 'approved')
+  const draftRejectedArtists = data.artists.filter(
+    artist => artist.approvalStatus === 'draft' || artist.approvalStatus === 'rejected'
+  )
+
+  return (
+    <>
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+        <StatCard label="Total Artists" value={data.metrics.totalArtists} icon={Users} />
+        <StatCard label="Approved Artists" value={data.metrics.approvedArtists} icon={CheckCircle} />
+        <StatCard label="Draft Artists" value={data.metrics.draftArtists} icon={Clock} accent />
+        <StatCard label="Rejected Artists" value={data.metrics.rejectedArtists} icon={ShieldAlert} danger />
+        <StatCard label="Unverified Artists" value={data.metrics.unverifiedArtists} icon={BadgeCheck} warning />
+        <StatCard label="Featured Artists" value={data.metrics.featuredArtists} icon={Star} featured />
+        <StatCard label="Total Booking Inquiries" value={data.metrics.totalBookingInquiries} icon={FileText} />
+        <StatCard label="New Inquiries" value={data.metrics.newInquiries} icon={Clock} warning />
+      </div>
+
+      {activeTab === 'overview' && (
+        <div className="space-y-10">
+          <Section title="Pending Review" count={pendingArtists.length} accent>
+            {pendingArtists.length === 0 ? (
+              <EmptyState message="No artists are waiting for review." />
+            ) : (
+              pendingArtists.map(artist => <AdminArtistCardRow key={artist.id} artist={artist} />)
+            )}
+          </Section>
+
+          <Section title="Approved Artists" count={approvedArtists.length}>
+            {approvedArtists.length === 0 ? (
+              <EmptyState message="No approved artists yet." />
+            ) : (
+              approvedArtists.map(artist => <AdminArtistCardRow key={artist.id} artist={artist} />)
+            )}
+          </Section>
+
+          <Section title="Booking Inquiries" count={filteredInquiries.length}>
+            {filteredInquiries.length === 0 ? (
+              <EmptyState message="No inquiries yet." />
+            ) : (
+              filteredInquiries.slice(0, 8).map(inquiry => (
+                <AdminInquiryCardRow key={inquiry.id} inquiry={inquiry} />
+              ))
+            )}
+          </Section>
+        </div>
+      )}
+
+      {activeTab === 'all' && (
+        <div className="space-y-6">
+          <ArtistFiltersForm
+            categories={data.categories}
+            cities={data.cities}
+            params={params}
+          />
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-lg font-semibold" style={{ color: 'var(--foreground)' }}>
+              All Artists
+            </h2>
+            <span className="text-sm" style={{ color: 'var(--muted)' }}>
+              {filteredAllArtists.length} result{filteredAllArtists.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div className="space-y-3">
+            {filteredAllArtists.length === 0 ? (
+              <EmptyState message="No artists match the current filters." />
+            ) : (
+              filteredAllArtists.map(artist => <AdminArtistCardRow key={artist.id} artist={artist} />)
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'pending' && (
+        <Section title="Pending Review" count={pendingArtists.length} accent>
+          {pendingArtists.length === 0 ? (
+            <EmptyState message="No artists are waiting for review." />
+          ) : (
+            pendingArtists.map(artist => <AdminArtistCardRow key={artist.id} artist={artist} />)
+          )}
+        </Section>
+      )}
+
+      {activeTab === 'approved' && (
+        <Section title="Approved Artists" count={approvedArtists.length}>
+          {approvedArtists.length === 0 ? (
+            <EmptyState message="No approved artists yet." />
+          ) : (
+            approvedArtists.map(artist => <AdminArtistCardRow key={artist.id} artist={artist} />)
+          )}
+        </Section>
+      )}
+
+      {activeTab === 'draft' && (
+        <Section title="Draft / Rejected" count={draftRejectedArtists.length}>
+          {draftRejectedArtists.length === 0 ? (
+            <EmptyState message="No draft or rejected artists." />
+          ) : (
+            draftRejectedArtists.map(artist => <AdminArtistCardRow key={artist.id} artist={artist} />)
+          )}
+        </Section>
+      )}
+
+      {activeTab === 'inquiries' && (
+        <Section title="Booking Inquiries" count={filteredInquiries.length}>
+          {filteredInquiries.length === 0 ? (
+            <EmptyState message="No inquiries yet." />
+          ) : (
+            filteredInquiries.map(inquiry => <AdminInquiryCardRow key={inquiry.id} inquiry={inquiry} />)
+          )}
+        </Section>
+      )}
+    </>
+  )
+}
+
+function AdminDashboardContentFallback({ activeTab }: { activeTab: string }) {
+  const sectionLabel =
+    activeTab === 'all'
+      ? 'Loading artist filters…'
+      : activeTab === 'inquiries'
+        ? 'Loading inquiries…'
+        : 'Loading admin data…'
+
+  return (
+    <>
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <div
+            key={index}
+            className="bg-white rounded-2xl p-5 border"
+            style={{ border: '1px solid var(--border)' }}
+          >
+            <div className="h-3 w-24 rounded-full bg-[var(--surface-2)]" />
+            <div className="mt-4 h-8 w-16 rounded-full bg-[var(--surface-2)]" />
+          </div>
+        ))}
+      </div>
+      <div
+        className="rounded-2xl border bg-white p-6 text-sm"
+        style={{ border: '1px solid var(--border)', color: 'var(--muted)' }}
+      >
+        {sectionLabel}
+      </div>
+    </>
+  )
 }
 
 function StatCard({

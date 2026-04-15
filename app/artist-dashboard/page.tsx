@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import ArtistDashboardShell from '@/components/ArtistDashboardShell'
 import { CheckCircle, Clock, AlertCircle, XCircle, Edit, Eye, Mail } from 'lucide-react'
@@ -33,6 +34,16 @@ type InquiryRow = {
   message?: string | null
 }
 
+type PendingEmailRequestRow = {
+  id: string
+  status: string
+  current_email: string
+  requested_email: string
+  reason: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
 const statusConfig: Record<string, { label: string; icon: LucideIcon; color: string; bg: string; desc: string }> = {
   draft: { label: 'Draft', icon: AlertCircle, color: 'var(--accent-violet)', bg: 'var(--surface-2)', desc: 'Complete your profile to submit for review' },
   pending: { label: 'Pending Review', icon: Clock, color: 'var(--accent-violet)', bg: 'var(--surface-2)', desc: 'We\'re reviewing your profile' },
@@ -46,30 +57,25 @@ export default async function ArtistDashboard() {
 
   if (!user) redirect('/artist-login')
 
-  const { data: userRecord } = await supabase
-    .from('users')
-    .select('role, email, phone_number')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  const profileResult = (await supabase
-    .from('artist_profiles')
-    .select('*, users(full_name, phone_number, email), primary_category:categories(name), categories, custom_categories')
-    .eq('user_id', user.id)
-    .maybeSingle()) as { data: PublicArtistRecord | null }
+  const [userRecordResult, profileResult] = await Promise.all([
+    supabase
+      .from('users')
+      .select('role, email, phone_number')
+      .eq('id', user.id)
+      .maybeSingle(),
+    supabase
+      .from('artist_profiles')
+      .select('id, slug, stage_name, category_id, locality, city, state, preferred_working_locations, bio, pricing_start, profile_image, profile_image_cropped, approval_status, users(full_name, phone_number, email), primary_category:categories(name), categories, custom_categories')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(result => result as { data: PublicArtistRecord | null }),
+  ])
+  const { data: userRecord } = userRecordResult
   const { data: profile } = profileResult
 
   if (userRecord?.role !== 'artist' && !profile) {
     redirect('/artist-login?reason=not-artist')
   }
-
-  const inquiriesResult = (await supabase
-    .from('booking_inquiries')
-    .select('id, client_name, event_type, custom_event_type, event_size, event_duration, venue_type, city, event_date, status, artist_price, client_offer, additional_details, message, created_at')
-    .eq('artist_id', profile?.id ?? '')
-    .order('created_at', { ascending: false })
-    .limit(5)) as { data: InquiryRow[] | null }
-  const { data: inquiries } = inquiriesResult
 
   const status = profile?.approval_status ?? 'draft'
   const statusInfo = statusConfig[status] ?? statusConfig.draft
@@ -79,29 +85,6 @@ export default async function ArtistDashboard() {
     : userRecord?.email?.split('@')[0] ?? 'ShowStellar Artist'
   const publicProfilePath = profile ? getArtistPublicPath(profile) : ''
   const preferredWorkingLocations = profile ? getArtistPreferredWorkingLocationsText(profile) : null
-  let pendingEmailRequest = null as
-    | null
-    | {
-        id: string
-        status: string
-        current_email: string
-        requested_email: string
-        reason: string | null
-        created_at: string | null
-        updated_at: string | null
-      }
-
-  const pendingEmailRequestResult = await supabase
-    .from('email_change_requests')
-    .select('id, status, current_email, requested_email, reason, created_at, updated_at')
-    .eq('user_id', user.id)
-    .eq('status', 'pending')
-    .maybeSingle()
-
-  if (!isMissingEmailChangeRequestsTableError(pendingEmailRequestResult.error)) {
-    pendingEmailRequest = pendingEmailRequestResult.data
-  }
-  const emailChangeRequestsEnabled = !isMissingEmailChangeRequestsTableError(pendingEmailRequestResult.error)
 
   return (
     <ArtistDashboardShell artistName={artistName}>
@@ -188,131 +171,277 @@ export default async function ArtistDashboard() {
           </div>
         </div>
 
-        <div className="mb-8">
-          <ArtistContactInformationSection
+        <Suspense
+          fallback={
+            <DashboardSecondaryFallback
+              categorySummary={profile ? getArtistCategories(profile).summary : '—'}
+              city={profile?.city ?? '—'}
+              profileId={profile?.id ?? ''}
+              publicProfilePath={publicProfilePath}
+              status={status}
+            />
+          }
+        >
+          <ArtistDashboardSecondaryPanels
             artistId={profile?.id ?? ''}
+            categorySummary={profile ? getArtistCategories(profile).summary : '—'}
+            city={profile?.city ?? '—'}
             email={userRecord?.email ?? profile?.users?.email ?? null}
             phoneNumber={profile?.users?.phone_number ?? userRecord?.phone_number ?? null}
-            emailChangeRequestsEnabled={emailChangeRequestsEnabled}
-            pendingEmailRequest={
-              pendingEmailRequest
-                ? {
-                    id: pendingEmailRequest.id,
-                    status: pendingEmailRequest.status,
-                    currentEmail: pendingEmailRequest.current_email,
-                    requestedEmail: pendingEmailRequest.requested_email,
-                    reason: pendingEmailRequest.reason ?? null,
-                    createdAt: pendingEmailRequest.created_at ?? null,
-                  }
-                : null
-            }
+            profileId={profile?.id ?? ''}
+            publicProfilePath={publicProfilePath}
+            status={status}
+            userId={user.id}
           />
-        </div>
+        </Suspense>
+      </div>
+    </ArtistDashboardShell>
+  )
+}
 
-        {/* Quick Actions */}
-        <div className="bg-white border rounded-2xl p-6 mb-8" style={{ border: '1px solid var(--border)' }}>
-          <h3 className="font-semibold mb-5" style={{ color: 'var(--foreground)' }}>Quick Actions</h3>
-          <div className="grid sm:grid-cols-3 gap-4">
+async function ArtistDashboardSecondaryPanels({
+  artistId,
+  categorySummary,
+  city,
+  email,
+  phoneNumber,
+  profileId,
+  publicProfilePath,
+  status,
+  userId,
+}: {
+  artistId: string
+  categorySummary: string
+  city: string
+  email: string | null
+  phoneNumber: string | null
+  profileId: string
+  publicProfilePath: string
+  status: string
+  userId: string
+}) {
+  const supabase = await createClient()
+  const [inquiriesResult, pendingEmailRequestResult] = await Promise.all([
+    artistId
+      ? supabase
+          .from('booking_inquiries')
+          .select('id, client_name, event_type, custom_event_type, event_size, event_duration, venue_type, city, event_date, status, artist_price, client_offer, additional_details, message, created_at')
+          .eq('artist_id', artistId)
+          .order('created_at', { ascending: false })
+          .limit(5)
+          .then(result => result as { data: InquiryRow[] | null; error: { message?: string } | null })
+      : Promise.resolve({ data: [] as InquiryRow[] | null, error: null }),
+    supabase
+      .from('email_change_requests')
+      .select('id, status, current_email, requested_email, reason, created_at, updated_at')
+      .eq('user_id', userId)
+      .eq('status', 'pending')
+      .maybeSingle(),
+  ])
+
+  if (inquiriesResult.error) {
+    console.error('[artist-dashboard] inquiries fetch failed:', inquiriesResult.error)
+  }
+
+  const inquiries = inquiriesResult.data ?? []
+  const emailChangeRequestsEnabled = !isMissingEmailChangeRequestsTableError(pendingEmailRequestResult.error)
+  const pendingEmailRequest = emailChangeRequestsEnabled
+    ? (pendingEmailRequestResult.data as PendingEmailRequestRow | null)
+    : null
+  const publicProfileHref = publicProfilePath || (profileId ? `/artist/${profileId}` : '')
+
+  return (
+    <>
+      <div className="mb-8">
+        <ArtistContactInformationSection
+          artistId={artistId}
+          email={email}
+          phoneNumber={phoneNumber}
+          emailChangeRequestsEnabled={emailChangeRequestsEnabled}
+          pendingEmailRequest={
+            pendingEmailRequest
+              ? {
+                  id: pendingEmailRequest.id,
+                  status: pendingEmailRequest.status,
+                  currentEmail: pendingEmailRequest.current_email,
+                  requestedEmail: pendingEmailRequest.requested_email,
+                  reason: pendingEmailRequest.reason ?? null,
+                  createdAt: pendingEmailRequest.created_at ?? null,
+                }
+              : null
+          }
+        />
+      </div>
+
+      <div className="bg-white border rounded-2xl p-6 mb-8" style={{ border: '1px solid var(--border)' }}>
+        <h3 className="font-semibold mb-5" style={{ color: 'var(--foreground)' }}>Quick Actions</h3>
+        <div className="grid sm:grid-cols-3 gap-4">
+          <Link
+            href="/artist-dashboard/profile"
+            className="flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-medium transition-colors hover:opacity-80"
+            style={{ border: '1px solid var(--border)', color: 'var(--foreground)' }}
+          >
+            <Edit className="w-4 h-4" />
+            Edit Profile
+          </Link>
+          {status === 'approved' && profileId && (
             <Link
-              href="/artist-dashboard/profile"
+              href={publicProfileHref}
               className="flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-medium transition-colors hover:opacity-80"
               style={{ border: '1px solid var(--border)', color: 'var(--foreground)' }}
             >
-              <Edit className="w-4 h-4" />
-              Edit Profile
+              <Eye className="w-4 h-4" />
+              View Public Profile
             </Link>
-            {status === 'approved' && profile?.id && (
-              <Link
-                href={publicProfilePath || `/artist/${profile.id}`}
-                className="flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-medium transition-colors hover:opacity-80"
-                style={{ border: '1px solid var(--border)', color: 'var(--foreground)' }}
-              >
-                <Eye className="w-4 h-4" />
-                View Public Profile
-              </Link>
-            )}
-            <div
-              className="flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-medium"
-              style={{ border: '1px solid var(--border)', color: 'var(--muted)', background: 'var(--surface-2)' }}
-            >
-              <Mail className="w-4 h-4" />
-              {inquiries?.length ?? 0} Inquiries
-            </div>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="bg-white border rounded-2xl p-5" style={{ border: '1px solid var(--border)' }}>
-            <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Total Inquiries</p>
-            <p className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>{inquiries?.length ?? 0}</p>
-          </div>
-            <div className="bg-white border rounded-2xl p-5" style={{ border: '1px solid var(--border)' }}>
-              <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Category</p>
-            <p className="text-lg font-bold truncate" style={{ color: 'var(--foreground)' }}>
-              {profile ? getArtistCategories(profile).summary : '—'}
-            </p>
-            </div>
-          <div className="bg-white border rounded-2xl p-5" style={{ border: '1px solid var(--border)' }}>
-            <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>City</p>
-            <p className="text-lg font-bold truncate" style={{ color: 'var(--foreground)' }}>{profile?.city ?? '—'}</p>
-          </div>
-        </div>
-
-        {/* Recent Inquiries */}
-        <div className="bg-white border rounded-2xl p-6" style={{ border: '1px solid var(--border)' }}>
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="font-semibold" style={{ color: 'var(--foreground)' }}>Recent Inquiries</h3>
-            {inquiries && inquiries.length > 0 && (
-              <span className="text-sm" style={{ color: 'var(--muted)' }}>{inquiries.length} total</span>
-            )}
-          </div>
-
-          {!inquiries || inquiries.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--surface-2)' }}>
-                <Mail className="w-8 h-8" style={{ color: 'var(--muted)' }} />
-              </div>
-              <p style={{ color: 'var(--muted)' }}>No inquiries yet. Once your profile is approved, inquiries will appear here.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {inquiries.map((inq) => (
-                <div
-                  key={inq.id}
-                  className="border rounded-xl p-4 hover:shadow-sm transition-shadow"
-                  style={{ border: '1px solid var(--border)' }}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <h4 className="font-semibold text-sm" style={{ color: 'var(--foreground)' }}>{inq.client_name}</h4>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
-                        {inq.event_type}
-                        {inq.custom_event_type ? ` · ${inq.custom_event_type}` : ''}
-                        {inq.event_size ? ` · ${inq.event_size}` : ''}
-                        {inq.event_duration ? ` · ${inq.event_duration}` : ''}
-                        {inq.venue_type ? ` · ${inq.venue_type}` : ''}
-                        · {inq.city} · {inq.event_date}
-                      </p>
-                    </div>
-                    <StatusPill status={inq.status} />
-                  </div>
-                  <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
-                    Price: {displayOptionalPrice(formatMoney(inq.artist_price), 'Not listed')}
-                    {inq.client_offer ? ` · Offer: ${displayOptionalPrice(formatMoney(inq.client_offer), 'To be discussed')}` : ''}
-                  </p>
-                  {(inq.additional_details || inq.message) && (
-                    <p className="text-xs line-clamp-1" style={{ color: 'var(--muted)' }}>
-                      {inq.additional_details || inq.message}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
           )}
+          <div
+            className="flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-medium"
+            style={{ border: '1px solid var(--border)', color: 'var(--muted)', background: 'var(--surface-2)' }}
+          >
+            <Mail className="w-4 h-4" />
+            {inquiries.length} Inquiries
+          </div>
         </div>
       </div>
-    </ArtistDashboardShell>
+
+      <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="bg-white border rounded-2xl p-5" style={{ border: '1px solid var(--border)' }}>
+          <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Total Inquiries</p>
+          <p className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>{inquiries.length}</p>
+        </div>
+        <div className="bg-white border rounded-2xl p-5" style={{ border: '1px solid var(--border)' }}>
+          <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Category</p>
+          <p className="text-lg font-bold truncate" style={{ color: 'var(--foreground)' }}>{categorySummary}</p>
+        </div>
+        <div className="bg-white border rounded-2xl p-5" style={{ border: '1px solid var(--border)' }}>
+          <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>City</p>
+          <p className="text-lg font-bold truncate" style={{ color: 'var(--foreground)' }}>{city}</p>
+        </div>
+      </div>
+
+      <div className="bg-white border rounded-2xl p-6" style={{ border: '1px solid var(--border)' }}>
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="font-semibold" style={{ color: 'var(--foreground)' }}>Recent Inquiries</h3>
+          {inquiries.length > 0 && (
+            <span className="text-sm" style={{ color: 'var(--muted)' }}>{inquiries.length} total</span>
+          )}
+        </div>
+
+        {inquiries.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--surface-2)' }}>
+              <Mail className="w-8 h-8" style={{ color: 'var(--muted)' }} />
+            </div>
+            <p style={{ color: 'var(--muted)' }}>No inquiries yet. Once your profile is approved, inquiries will appear here.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {inquiries.map(inq => (
+              <div
+                key={inq.id}
+                className="border rounded-xl p-4 hover:shadow-sm transition-shadow"
+                style={{ border: '1px solid var(--border)' }}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <h4 className="font-semibold text-sm" style={{ color: 'var(--foreground)' }}>{inq.client_name}</h4>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
+                      {inq.event_type}
+                      {inq.custom_event_type ? ` · ${inq.custom_event_type}` : ''}
+                      {inq.event_size ? ` · ${inq.event_size}` : ''}
+                      {inq.event_duration ? ` · ${inq.event_duration}` : ''}
+                      {inq.venue_type ? ` · ${inq.venue_type}` : ''}
+                      · {inq.city} · {inq.event_date}
+                    </p>
+                  </div>
+                  <StatusPill status={inq.status} />
+                </div>
+                <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+                  Price: {displayOptionalPrice(formatMoney(inq.artist_price), 'Not listed')}
+                  {inq.client_offer ? ` · Offer: ${displayOptionalPrice(formatMoney(inq.client_offer), 'To be discussed')}` : ''}
+                </p>
+                {(inq.additional_details || inq.message) && (
+                  <p className="text-xs line-clamp-1" style={{ color: 'var(--muted)' }}>
+                    {inq.additional_details || inq.message}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+function DashboardSecondaryFallback({
+  categorySummary,
+  city,
+  profileId,
+  publicProfilePath,
+  status,
+}: {
+  categorySummary: string
+  city: string
+  profileId: string
+  publicProfilePath: string
+  status: string
+}) {
+  const publicProfileHref = publicProfilePath || (profileId ? `/artist/${profileId}` : '')
+
+  return (
+    <>
+      <div className="mb-8 rounded-2xl border bg-white p-6" style={{ border: '1px solid var(--border)' }}>
+        <p className="text-sm" style={{ color: 'var(--muted)' }}>Loading contact information…</p>
+      </div>
+      <div className="bg-white border rounded-2xl p-6 mb-8" style={{ border: '1px solid var(--border)' }}>
+        <h3 className="font-semibold mb-5" style={{ color: 'var(--foreground)' }}>Quick Actions</h3>
+        <div className="grid sm:grid-cols-3 gap-4">
+          <Link
+            href="/artist-dashboard/profile"
+            className="flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-medium transition-colors hover:opacity-80"
+            style={{ border: '1px solid var(--border)', color: 'var(--foreground)' }}
+          >
+            <Edit className="w-4 h-4" />
+            Edit Profile
+          </Link>
+          {status === 'approved' && profileId && (
+            <Link
+              href={publicProfileHref}
+              className="flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-medium transition-colors hover:opacity-80"
+              style={{ border: '1px solid var(--border)', color: 'var(--foreground)' }}
+            >
+              <Eye className="w-4 h-4" />
+              View Public Profile
+            </Link>
+          )}
+          <div
+            className="flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-medium"
+            style={{ border: '1px solid var(--border)', color: 'var(--muted)', background: 'var(--surface-2)' }}
+          >
+            <Mail className="w-4 h-4" />
+            Loading inquiries…
+          </div>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="bg-white border rounded-2xl p-5" style={{ border: '1px solid var(--border)' }}>
+          <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Total Inquiries</p>
+          <p className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>…</p>
+        </div>
+        <div className="bg-white border rounded-2xl p-5" style={{ border: '1px solid var(--border)' }}>
+          <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Category</p>
+          <p className="text-lg font-bold truncate" style={{ color: 'var(--foreground)' }}>{categorySummary}</p>
+        </div>
+        <div className="bg-white border rounded-2xl p-5" style={{ border: '1px solid var(--border)' }}>
+          <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>City</p>
+          <p className="text-lg font-bold truncate" style={{ color: 'var(--foreground)' }}>{city}</p>
+        </div>
+      </div>
+      <div className="bg-white border rounded-2xl p-6" style={{ border: '1px solid var(--border)' }}>
+        <p style={{ color: 'var(--muted)' }}>Loading recent inquiries…</p>
+      </div>
+    </>
   )
 }
 

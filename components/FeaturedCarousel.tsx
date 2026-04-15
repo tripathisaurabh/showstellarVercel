@@ -184,7 +184,7 @@ export default function FeaturedCarousel({ artists }: { artists: FeaturedArtistS
                     fill
                     sizes="(max-width: 640px) 86vw, (max-width: 1024px) calc(50vw - 32px), (max-width: 1280px) calc(33vw - 32px)"
                     className="object-cover object-top transition-transform duration-500 group-hover:scale-[1.03]"
-                    loading={i < 3 ? 'eager' : 'lazy'}
+                    loading="lazy"
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,var(--surface-2),var(--background))] text-5xl">

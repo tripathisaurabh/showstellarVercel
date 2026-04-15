@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import EmailCenterShell from '@/components/email-center/EmailCenterShell'
 import { getAdminSession } from '@/lib/admin-access'
-import { loadAdminArtistDetail } from '@/lib/admin-dashboard'
-import type { AdminArtistDetailData } from '@/lib/admin-dashboard'
+import { loadAdminArtistEmailSeed } from '@/lib/admin-dashboard'
+import type { AdminEmailArtistSeed } from '@/lib/admin-dashboard'
 
 export const metadata: Metadata = {
   title: 'Email Center',
@@ -35,11 +35,10 @@ export default async function EmailCenterPage({
     redirect('/admin/login?reason=not-admin')
   }
 
-  let selectedArtist: AdminArtistDetailData['artist'] | null = null
+  let selectedArtist: AdminEmailArtistSeed | null = null
 
   if (params.artistId) {
-    const artistData = await loadAdminArtistDetail(params.artistId)
-    selectedArtist = artistData?.artist ?? null
+    selectedArtist = await loadAdminArtistEmailSeed(params.artistId)
   }
 
   return (

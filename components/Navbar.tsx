@@ -14,8 +14,16 @@ export default function Navbar() {
   const router = useRouter()
   const [navAccess, setNavAccess] = useState<NavAccess>('loading')
   const [open, setOpen] = useState(false)
+  const isAdmin = pathname.startsWith('/admin')
+  const isDashboard = pathname.startsWith('/artist-dashboard')
+  const isAuthOnlyRoute = pathname === '/artist-login' || pathname === '/admin/login'
+  const shouldSkipNavigationLookup = isAdmin || isDashboard || isAuthOnlyRoute
 
   useEffect(() => {
+    if (shouldSkipNavigationLookup) {
+      return
+    }
+
     const supabase = createClient()
     let alive = true
 
@@ -92,10 +100,8 @@ export default function Navbar() {
       alive = false
       subscription.unsubscribe()
     }
-  }, [])
+  }, [shouldSkipNavigationLookup])
 
-  const isAdmin = pathname.startsWith('/admin')
-  const isDashboard = pathname.startsWith('/artist-dashboard')
   if (isAdmin || isDashboard) return null
 
   async function handleLogout() {
@@ -116,9 +122,13 @@ export default function Navbar() {
     { href: '/for-artist', label: 'For Artists' },
   ]
 
-  const showDashboard = navAccess === 'artist'
-  const showAdminLink = navAccess === 'admin'
-  const showLoggedInControls = navAccess === 'authenticated' || navAccess === 'artist' || navAccess === 'admin'
+  const resolvedNavAccess: NavAccess = shouldSkipNavigationLookup ? 'guest' : navAccess
+  const showDashboard = resolvedNavAccess === 'artist'
+  const showAdminLink = resolvedNavAccess === 'admin'
+  const showLoggedInControls =
+    resolvedNavAccess === 'authenticated' ||
+    resolvedNavAccess === 'artist' ||
+    resolvedNavAccess === 'admin'
 
   return (
     <header className="sticky top-0 z-50 border-b border-[rgba(0,23,57,0.08)] bg-white">
@@ -170,7 +180,7 @@ export default function Navbar() {
                 <LogOut className="h-4 w-4" />
                 Log out
               </button>
-              {navAccess === 'authenticated' && (
+              {resolvedNavAccess === 'authenticated' && (
                 <Link
                   href="/artist-signup"
                   className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(0,23,57,0.16)] transition-all hover:-translate-y-0.5 hover:bg-[#0a2148]"
@@ -265,7 +275,7 @@ export default function Navbar() {
                   >
                     Log out
                   </button>
-                  {navAccess === 'authenticated' && (
+                  {resolvedNavAccess === 'authenticated' && (
                     <Link
                       href="/artist-signup"
                       className="mt-1 inline-flex items-center justify-center gap-2 rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(0,23,57,0.16)] transition-all hover:bg-[#0a2148]"
