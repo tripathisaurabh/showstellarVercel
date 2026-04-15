@@ -1,12 +1,12 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import dynamicImport from 'next/dynamic'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import ArtistDashboardShell from '@/components/ArtistDashboardShell'
 import CategorySelector from '@/components/CategorySelector'
-import ProfilePhotoCropModal from '@/components/ProfilePhotoCropModal'
 import { ProfileEditorSkeleton } from '@/components/ShowStellarSkeletons'
 import { Upload, Trash2, Save } from 'lucide-react'
 import {
@@ -26,17 +26,161 @@ import {
 
 export const dynamic = 'force-dynamic'
 
+const ProfilePhotoCropModal = dynamicImport(
+  () => import('@/components/ProfilePhotoCropModal'),
+  { ssr: false }
+)
+
+const MAX_PROFILE_IMAGE_SIZE_MB = 5
+const MAX_MEDIA_SIZE_MB = 50
+const allowedImageMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const allowedGalleryImageMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+const allowedVideoMimeTypes = new Set(['video/mp4', 'video/webm', 'video/quicktime'])
+const CATEGORY_OPTIONS = Array.from(ARTIST_CATEGORY_OPTIONS)
+const SIGN_REQUEST_TIMEOUT_MS = 15000
+const SAVE_REQUEST_TIMEOUT_MS = 15000
+const STORAGE_UPLOAD_TIMEOUT_MS = 60000
+
+type TimeoutError = Error & { code?: 'TIMEOUT' }
+
+function toTimeoutError(message: string): TimeoutError {
+  const error = new Error(message) as TimeoutError
+  error.code = 'TIMEOUT'
+  return error
+}
+
+function isTimeoutError(error: unknown) {
+  return (
+    (error instanceof Error && (error as TimeoutError).code === 'TIMEOUT') ||
+    (error instanceof DOMException && error.name === 'AbortError')
+  )
+}
+
+async function withOperationTimeout<T>(operation: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => reject(toTimeoutError(timeoutMessage)), timeoutMs)
+  })
+
+  try {
+    return await Promise.race([operation, timeoutPromise]) as T
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+  }
+}
+
+async function fetchJsonWithTimeout<T>(input: string, init: RequestInit, timeoutMs: number) {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetch(input, { ...init, signal: controller.signal })
+    const data = (await response.json().catch(() => null)) as T | null
+    return { response, data }
+  } catch (error: unknown) {
+    if (isTimeoutError(error)) {
+      throw toTimeoutError('Request timed out')
+    }
+    throw error
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+function getFileBaseName(fileName: string) {
+  return fileName.replace(/\.[^.]+$/, '').slice(0, 80) || 'media'
+}
+
+async function maybeCompressGalleryImage(file: File) {
+  const shouldSkip =
+    !file.type.startsWith('image/') ||
+    file.type === 'image/gif' ||
+    file.size <= 4 * 1024 * 1024
+
+  if (shouldSkip) {
+    return {
+      file,
+      optimized: false,
+    }
+  }
+
+  const objectUrl = URL.createObjectURL(file)
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new window.Image()
+      img.onload = () => resolve(img)
+      img.onerror = () => reject(new Error('Unable to read selected image'))
+      img.src = objectUrl
+    })
+
+    const maxDimension = 2560
+    const largestSide = Math.max(image.naturalWidth, image.naturalHeight)
+    const scale = largestSide > maxDimension ? maxDimension / largestSide : 1
+    const targetWidth = Math.max(1, Math.round(image.naturalWidth * scale))
+    const targetHeight = Math.max(1, Math.round(image.naturalHeight * scale))
+
+    if (scale >= 0.999 && file.size <= 7 * 1024 * 1024) {
+      return {
+        file,
+        optimized: false,
+      }
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = targetWidth
+    canvas.height = targetHeight
+
+    const context = canvas.getContext('2d')
+    if (!context) {
+      return {
+        file,
+        optimized: false,
+      }
+    }
+
+    context.drawImage(image, 0, 0, targetWidth, targetHeight)
+
+    const optimizedBlob = await new Promise<Blob | null>(resolve => {
+      canvas.toBlob(resolve, 'image/webp', 0.86)
+    })
+
+    if (!optimizedBlob || optimizedBlob.size >= file.size * 0.93) {
+      return {
+        file,
+        optimized: false,
+      }
+    }
+
+    return {
+      file: new File([optimizedBlob], `${getFileBaseName(file.name)}.webp`, {
+        type: 'image/webp',
+      }),
+      optimized: true,
+    }
+  } catch {
+    return {
+      file,
+      optimized: false,
+    }
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
+}
+
 export default function ProfileEditorPage() {
   const router = useRouter()
   const mediaFileRef = useRef<HTMLInputElement>(null)
   const dpFileRef = useRef<HTMLInputElement>(null)
-  const MAX_PROFILE_IMAGE_SIZE_MB = 5
-  const MAX_MEDIA_SIZE_MB = 50
-  const allowedImageMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
-  const allowedGalleryImageMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
-  const allowedVideoMimeTypes = new Set(['video/mp4', 'video/webm', 'video/quicktime'])
 
   type PhotoBusyState = {
+    phase: 'preparing' | 'optimizing' | 'uploading' | 'saving'
+    message: string
+    progress: number
+  } | null
+
+  type MediaBusyState = {
     phase: 'preparing' | 'optimizing' | 'uploading' | 'saving'
     message: string
     progress: number
@@ -45,7 +189,10 @@ export default function ProfileEditorPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploadingMedia, setUploadingMedia] = useState(false)
-  const [error, setError] = useState('')
+  const [mediaBusyState, setMediaBusyState] = useState<MediaBusyState>(null)
+  const [formError, setFormError] = useState('')
+  const [mediaError, setMediaError] = useState('')
+  const [mediaSuccess, setMediaSuccess] = useState('')
   const [success, setSuccess] = useState(false)
   const [photoToast, setPhotoToast] = useState('')
   const [photoError, setPhotoError] = useState('')
@@ -56,6 +203,8 @@ export default function ProfileEditorPage() {
   const [artistName, setArtistName] = useState('')
   const [publicPath, setPublicPath] = useState('')
   const [media, setMedia] = useState<{ id: string; media_url: string; type: string }[]>([])
+  const [pendingMediaPreviewUrl, setPendingMediaPreviewUrl] = useState<string | null>(null)
+  const [pendingMediaPreviewType, setPendingMediaPreviewType] = useState<'image' | 'video' | null>(null)
   const [categorySelection, setCategorySelection] = useState<{ categories: string[]; customCategories: string[] }>({
     categories: [],
     customCategories: [],
@@ -65,6 +214,14 @@ export default function ProfileEditorPage() {
   const mediaLimitReached = media.length >= MAX_ARTIST_MEDIA_ITEMS
 
   const getSupabase = () => createClient()
+
+  useEffect(() => {
+    return () => {
+      if (pendingMediaPreviewUrl) {
+        URL.revokeObjectURL(pendingMediaPreviewUrl)
+      }
+    }
+  }, [pendingMediaPreviewUrl])
 
   const [form, setForm] = useState({
     stage_name: '',
@@ -110,23 +267,58 @@ export default function ProfileEditorPage() {
     return null
   }
 
+  function getReadableUploadError(
+    error: unknown,
+    fileName?: string,
+    context: 'media' | 'photo' = 'media'
+  ) {
+    const fallbackLabel = fileName?.trim() || 'This file'
+    const message = error instanceof Error ? error.message : 'Failed to upload media'
+    const normalized = message.toLowerCase()
+
+    if (isTimeoutError(error) || normalized.includes('timed out')) {
+      return 'Upload took too long. Please check your network and try again.'
+    }
+
+    if (normalized.includes('413') || normalized.includes('payload too large')) {
+      const maxSize = context === 'photo' ? MAX_PROFILE_IMAGE_SIZE_MB : MAX_MEDIA_SIZE_MB
+      return `${fallbackLabel} is too large for upload. Please keep files under ${maxSize}MB.`
+    }
+
+    if (normalized.includes('network') || normalized.includes('failed to fetch')) {
+      return 'Network issue while uploading. Please check your internet connection and try again.'
+    }
+
+    if (normalized.includes('partial upload')) {
+      return `${fallbackLabel} uploaded, but it could not be linked to your profile. Please retry once.`
+    }
+
+    return message
+  }
+
   useEffect(() => {
     async function load() {
       const supabase = getSupabase()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/artist-login'); return }
 
-      const { data: userRecord } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', user.id)
-        .maybeSingle()
+      const [userRecordResult, profileResult] = await Promise.all([
+        supabase
+          .from('users')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle(),
+        supabase
+          .from('artist_profiles')
+          .select('id, slug, stage_name, bio, pricing_start, locality, city, state, preferred_working_locations, performance_style, event_types, languages_spoken, profile_image, profile_image_cropped, profile_image_original, experience_years, rating, categories, custom_categories, primary_category:categories(name), artist_media(id, media_url, type), users(full_name)')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+      ]) as [
+        { data: { role?: string | null } | null },
+        { data: PublicArtistRecord | null }
+      ]
 
-      const profileResult = (await supabase
-        .from('artist_profiles')
-        .select('*, primary_category:categories(name), categories, custom_categories, artist_media(*), users(full_name)')
-        .eq('user_id', user.id)
-        .maybeSingle()) as { data: PublicArtistRecord | null }
+      const userRecord = userRecordResult.data
 
       const profile = profileResult.data
 
@@ -173,25 +365,28 @@ export default function ProfileEditorPage() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
-    setError('')
+    setFormError('')
     setSaving(true)
     try {
-      const response = await fetch('/api/artist-profile', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
+      const { response, data: payload } = await fetchJsonWithTimeout<{ error?: string; publicPath?: string }>(
+        '/api/artist-profile',
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...form,
+            categories: categorySelection.categories,
+            custom_categories: categorySelection.customCategories,
+            profile_image: form.profile_image,
+            profile_image_cropped: form.profile_image_cropped,
+            profile_image_original: form.profile_image_original,
+          }),
         },
-        body: JSON.stringify({
-          ...form,
-          categories: categorySelection.categories,
-          custom_categories: categorySelection.customCategories,
-          profile_image: form.profile_image,
-          profile_image_cropped: form.profile_image_cropped,
-          profile_image_original: form.profile_image_original,
-        }),
-      })
+        SAVE_REQUEST_TIMEOUT_MS
+      )
 
-      const payload = await response.json().catch(() => null)
       if (!response.ok) {
         throw new Error(payload?.error ?? 'Failed to save profile')
       }
@@ -200,7 +395,11 @@ export default function ProfileEditorPage() {
       setSuccess(true)
       setTimeout(() => setSuccess(false), 3000)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to save profile')
+      if (isTimeoutError(err)) {
+        setFormError('Save is taking too long. Please check your connection and try again.')
+      } else {
+        setFormError(err instanceof Error ? err.message : 'Failed to save profile')
+      }
     } finally {
       setSaving(false)
     }
@@ -211,11 +410,11 @@ export default function ProfileEditorPage() {
     if (!file) return
     const validationError = getFileTypeError(file, 'image')
     if (validationError) {
-      setError(validationError)
+      setPhotoError(validationError)
       if (dpFileRef.current) dpFileRef.current.value = ''
       return
     }
-    setError('')
+    setFormError('')
     setPhotoError('')
     setPendingPhotoFile(file)
     setPhotoCropOpen(true)
@@ -243,29 +442,45 @@ export default function ProfileEditorPage() {
       const croppedFile = new File([croppedBlob], `${timestamp}-${createUploadId()}.jpg`, { type: 'image/jpeg' })
 
       setPhotoBusyState({ phase: 'uploading', message: 'Uploading profile photo...', progress: 72 })
-      const signResponse = await fetch('/api/artist-profile/photo/sign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          croppedFileName: croppedFile.name,
-          croppedFileType: croppedFile.type,
-          croppedFileSize: croppedFile.size,
-          originalFileName: pendingPhotoFile.name,
-          originalFileType: pendingPhotoFile.type,
-          originalFileSize: pendingPhotoFile.size,
-        }),
-      })
+      const { response: signResponse, data: signPayload } = await fetchJsonWithTimeout<{
+        ok?: boolean
+        error?: string
+        existingOriginalUrl?: string
+        cropped?: { path: string; token: string; publicUrl: string }
+        original?: { path: string; token: string; publicUrl: string }
+      }>(
+        '/api/artist-profile/photo/sign',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            croppedFileName: croppedFile.name,
+            croppedFileType: croppedFile.type,
+            croppedFileSize: croppedFile.size,
+            originalFileName: pendingPhotoFile.name,
+            originalFileType: pendingPhotoFile.type,
+            originalFileSize: pendingPhotoFile.size,
+          }),
+        },
+        SIGN_REQUEST_TIMEOUT_MS
+      )
 
-      const signPayload = await signResponse.json().catch(() => null)
       if (!signResponse.ok) {
         throw new Error(signPayload?.error ?? 'Failed to prepare profile photo upload')
       }
+      if (!signPayload?.cropped) {
+        throw new Error('Failed to prepare profile photo upload')
+      }
 
-      const croppedUpload = await supabase.storage
-        .from('artist-media')
-        .uploadToSignedUrl(signPayload.cropped.path, signPayload.cropped.token, croppedFile, {
-          contentType: croppedFile.type,
-        })
+      const croppedUpload = await withOperationTimeout(
+        supabase.storage
+          .from('artist-media')
+          .uploadToSignedUrl(signPayload.cropped.path, signPayload.cropped.token, croppedFile, {
+            contentType: croppedFile.type,
+          }),
+        STORAGE_UPLOAD_TIMEOUT_MS,
+        'Profile photo upload timed out'
+      )
 
       if (croppedUpload.error) {
         throw croppedUpload.error
@@ -273,11 +488,15 @@ export default function ProfileEditorPage() {
 
       let originalPublicUrl = signPayload?.existingOriginalUrl ?? previousOriginalImage
       if (signPayload?.original) {
-        const originalUpload = await supabase.storage
-          .from('artist-media')
-          .uploadToSignedUrl(signPayload.original.path, signPayload.original.token, pendingPhotoFile, {
-            contentType: pendingPhotoFile.type,
-          })
+        const originalUpload = await withOperationTimeout(
+          supabase.storage
+            .from('artist-media')
+            .uploadToSignedUrl(signPayload.original.path, signPayload.original.token, pendingPhotoFile, {
+              contentType: pendingPhotoFile.type,
+            }),
+          STORAGE_UPLOAD_TIMEOUT_MS,
+          'Original photo upload timed out'
+        )
 
         if (originalUpload.error) {
           throw originalUpload.error
@@ -288,21 +507,24 @@ export default function ProfileEditorPage() {
 
       setPhotoBusyState({ phase: 'saving', message: 'Saving changes...', progress: 92 })
       const croppedPublicUrl = signPayload.cropped.publicUrl
-      const response = await fetch('/api/artist-profile', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
+      const { response, data: payload } = await fetchJsonWithTimeout<{ error?: string; publicPath?: string }>(
+        '/api/artist-profile',
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            profile_image: croppedPublicUrl,
+            profile_image_cropped: croppedPublicUrl,
+            profile_image_original: originalPublicUrl,
+            categories: categorySelection.categories,
+            custom_categories: categorySelection.customCategories,
+          }),
         },
-        body: JSON.stringify({
-          profile_image: croppedPublicUrl,
-          profile_image_cropped: croppedPublicUrl,
-          profile_image_original: originalPublicUrl,
-          categories: categorySelection.categories,
-          custom_categories: categorySelection.customCategories,
-        }),
-      })
+        SAVE_REQUEST_TIMEOUT_MS
+      )
 
-      const payload = await response.json().catch(() => null)
       if (!response.ok) {
         throw new Error(payload?.error ?? 'Failed to save profile photo')
       }
@@ -328,7 +550,7 @@ export default function ProfileEditorPage() {
         profile_image_original: previousOriginalImage,
       }))
       setPhotoBusyState(null)
-      setPhotoError(err instanceof Error ? err.message : 'Failed to upload profile image')
+      setPhotoError(getReadableUploadError(err, pendingPhotoFile.name, 'photo'))
       throw err
     }
   }
@@ -336,67 +558,156 @@ export default function ProfileEditorPage() {
   async function handleMediaUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    let previewUrlForCleanup: string | null = null
+    setMediaBusyState(null)
+    setMediaSuccess('')
+    setMediaError('')
+    setPendingMediaPreviewType(null)
     const validationError = getFileTypeError(file, 'media')
     if (validationError) {
-      setError(validationError)
+      setMediaError(validationError)
       if (mediaFileRef.current) mediaFileRef.current.value = ''
       return
     }
     const limitError = getArtistMediaLimitError(media.length, 1)
     if (limitError) {
-      setError(limitError)
+      setMediaError(limitError)
       if (mediaFileRef.current) mediaFileRef.current.value = ''
       return
     }
     setUploadingMedia(true)
-    setError('')
+    setMediaBusyState({
+      phase: 'preparing',
+      message: `Preparing ${file.name || 'media file'}...`,
+      progress: 12,
+    })
     try {
       const supabase = getSupabase()
-      const signResponse = await fetch('/api/artist-profile/media/sign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-        }),
-      })
+      let uploadFile = file
 
-      const signPayload = await signResponse.json().catch(() => null)
+      if (file.type.startsWith('image/') && file.type !== 'image/gif') {
+        setMediaBusyState({
+          phase: 'optimizing',
+          message: 'Optimizing image for faster upload...',
+          progress: 22,
+        })
+
+        const optimized = await maybeCompressGalleryImage(file)
+        uploadFile = optimized.file
+        if (optimized.optimized) {
+          setMediaBusyState({
+            phase: 'optimizing',
+            message: 'Image optimized. Preparing secure upload...',
+            progress: 30,
+          })
+        }
+      }
+
+      if (pendingMediaPreviewUrl) {
+        URL.revokeObjectURL(pendingMediaPreviewUrl)
+      }
+      previewUrlForCleanup = URL.createObjectURL(uploadFile)
+      setPendingMediaPreviewUrl(previewUrlForCleanup)
+      setPendingMediaPreviewType(uploadFile.type.startsWith('video') ? 'video' : 'image')
+
+      setMediaBusyState({
+        phase: 'uploading',
+        message: 'Generating secure upload link...',
+        progress: 36,
+      })
+      const { response: signResponse, data: signPayload } = await fetchJsonWithTimeout<{
+        ok?: boolean
+        error?: string
+        path: string
+        token: string
+        publicUrl: string
+        type: 'image' | 'video'
+      }>(
+        '/api/artist-profile/media/sign',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileName: uploadFile.name,
+            fileType: uploadFile.type,
+            fileSize: uploadFile.size,
+          }),
+        },
+        SIGN_REQUEST_TIMEOUT_MS
+      )
+
       if (!signResponse.ok) {
         throw new Error(signPayload?.error ?? 'Failed to prepare media upload')
       }
+      if (!signPayload) {
+        throw new Error('Failed to prepare media upload')
+      }
 
-      const uploadResult = await supabase.storage
-        .from('artist-media')
-        .uploadToSignedUrl(signPayload.path, signPayload.token, file, {
-          contentType: file.type,
-        })
+      setMediaBusyState({
+        phase: 'uploading',
+        message: 'Uploading media file...',
+        progress: 70,
+      })
+      const uploadResult = await withOperationTimeout(
+        supabase.storage
+          .from('artist-media')
+          .uploadToSignedUrl(signPayload.path, signPayload.token, uploadFile, {
+            contentType: uploadFile.type,
+          }),
+        STORAGE_UPLOAD_TIMEOUT_MS,
+        'Upload timed out'
+      )
 
       if (uploadResult.error) {
         throw uploadResult.error
       }
 
-      const response = await fetch('/api/artist-profile/media', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          media_url: signPayload.publicUrl,
-          type: signPayload.type,
-        }),
+      setMediaBusyState({
+        phase: 'saving',
+        message: 'Saving media to your profile...',
+        progress: 90,
       })
+      const { response, data: payload } = await fetchJsonWithTimeout<{
+        ok?: boolean
+        error?: string
+        media?: { id: string; media_url: string; type: string }
+      }>(
+        '/api/artist-profile/media',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            media_url: signPayload.publicUrl,
+            type: signPayload.type,
+          }),
+        },
+        SAVE_REQUEST_TIMEOUT_MS
+      )
 
-      const payload = await response.json().catch(() => null)
       if (!response.ok) {
-        throw new Error(payload?.error ?? 'Failed to upload media')
+        throw new Error(payload?.error ?? 'Partial upload: media reached storage but profile save failed')
       }
 
-      if (payload?.media) {
-        setMedia(current => [...current, payload.media])
+      const savedMedia = payload?.media
+      if (savedMedia?.id && savedMedia.media_url && savedMedia.type) {
+        setMedia(current => [...current, savedMedia])
       }
+      setMediaSuccess('Media uploaded successfully')
+      window.setTimeout(() => setMediaSuccess(''), 2600)
+      setMediaBusyState({
+        phase: 'saving',
+        message: 'Upload complete',
+        progress: 100,
+      })
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to upload media')
+      setMediaError(getReadableUploadError(err, file.name))
     } finally {
+      if (previewUrlForCleanup) {
+        URL.revokeObjectURL(previewUrlForCleanup)
+      }
+      setPendingMediaPreviewUrl(null)
+      setPendingMediaPreviewType(null)
+      window.setTimeout(() => setMediaBusyState(null), 500)
       setUploadingMedia(false)
       if (mediaFileRef.current) mediaFileRef.current.value = ''
     }
@@ -404,7 +715,8 @@ export default function ProfileEditorPage() {
 
   async function deleteMedia(id: string) {
     try {
-      setError('')
+      setMediaError('')
+      setMediaSuccess('')
       const response = await fetch(`/api/artist-profile/media/${id}`, {
         method: 'DELETE',
       })
@@ -416,7 +728,7 @@ export default function ProfileEditorPage() {
 
       setMedia(m => m.filter(x => x.id !== id))
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to delete media')
+      setMediaError(err instanceof Error ? err.message : 'Failed to delete media')
     }
   }
 
@@ -479,9 +791,9 @@ export default function ProfileEditorPage() {
           </div>
         </div>
 
-        {error && (
+        {formError && (
           <div className="p-4 rounded-xl text-sm text-red-600 mb-6" style={{ background: 'var(--surface-2)', border: '1px solid rgba(193,117,245,0.18)' }}>
-            {error}
+            {formError}
           </div>
         )}
         {success && (
@@ -544,7 +856,7 @@ export default function ProfileEditorPage() {
               </div>
               <Field label="Categories">
                 <CategorySelector
-                  options={Array.from(ARTIST_CATEGORY_OPTIONS)}
+                  options={CATEGORY_OPTIONS}
                   value={categorySelection}
                   onChange={setCategorySelection}
                 />
@@ -677,6 +989,14 @@ export default function ProfileEditorPage() {
                   )
                 }
                 <div className="absolute inset-0 bg-gradient-to-t from-[rgba(0,23,57,0.20)] to-transparent pointer-events-none" />
+                <button
+                  type="button"
+                  onClick={() => void deleteMedia(media[0].id)}
+                  className="absolute top-2 right-2 w-8 h-8 rounded-full text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{ background: 'var(--foreground)' }}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {media.slice(1, 5).map(m => (
@@ -716,9 +1036,32 @@ export default function ProfileEditorPage() {
             </div>
           )}
 
-          {media.length > 0 && (
+          {uploadingMedia && pendingMediaPreviewUrl && (
             <div className="grid grid-cols-3 gap-3 mb-6">
-              {media.map(m => (
+              <div className="relative rounded-xl overflow-hidden aspect-square border" style={{ borderColor: 'var(--border)' }}>
+                {pendingMediaPreviewType === 'video' ? (
+                  <video src={pendingMediaPreviewUrl} className="h-full w-full object-cover" muted />
+                ) : (
+                  <Image
+                    src={pendingMediaPreviewUrl}
+                    alt="Uploading media preview"
+                    fill
+                    className="object-cover"
+                    sizes="64px"
+                  />
+                )}
+                <div className="absolute inset-0 bg-[rgba(0,23,57,0.5)] flex items-center justify-center">
+                  <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-[var(--foreground)]">
+                    Uploading...
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {media.length > 5 && (
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              {media.slice(5).map(m => (
                 <div key={m.id} className="relative rounded-xl overflow-hidden aspect-square group">
                   {m.type === 'video'
                     ? <video src={m.media_url} className="w-full h-full object-cover" />
@@ -758,31 +1101,62 @@ export default function ProfileEditorPage() {
             type="button"
             onClick={() => mediaFileRef.current?.click()}
             disabled={uploadingMedia || mediaLimitReached}
+            aria-busy={uploadingMedia}
             className="w-full py-8 rounded-xl text-sm font-medium border-2 border-dashed transition-colors disabled:opacity-50 flex flex-col items-center gap-2"
             style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
           >
             <Upload className="w-6 h-6" />
             {uploadingMedia ? 'Uploading…' : mediaLimitReached ? 'Media limit reached' : 'Upload Photos / Videos'}
           </button>
+          {mediaBusyState && (
+            <div className="mt-3 rounded-xl border px-3 py-3 text-xs" style={{ borderColor: 'var(--border)', background: 'var(--surface-2)', color: 'var(--muted)' }}>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <span>{mediaBusyState.message}</span>
+                <span className="font-medium" style={{ color: 'var(--foreground)' }}>{mediaBusyState.progress}%</span>
+              </div>
+              <div className="h-1.5 w-full rounded-full" style={{ background: 'rgba(0,23,57,0.12)' }}>
+                <div
+                  className="h-full rounded-full transition-all duration-200"
+                  style={{
+                    width: `${mediaBusyState.progress}%`,
+                    background: 'linear-gradient(90deg, #001739, #16386c)',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {mediaError && (
+            <div className="mb-4 rounded-xl border px-3 py-3 text-sm text-red-600" style={{ borderColor: 'rgba(193,117,245,0.22)', background: 'var(--surface-2)' }}>
+              {mediaError}
+            </div>
+          )}
+          {mediaSuccess && (
+            <div className="mb-4 rounded-xl border px-3 py-3 text-sm text-green-700" style={{ borderColor: 'rgba(0,23,57,0.16)', background: 'var(--surface-2)' }}>
+              {mediaSuccess}
+            </div>
+          )}
           <p className="mt-3 text-xs leading-6" style={{ color: 'var(--muted)' }}>
             Gallery uploads support JPG/JPEG, PNG, WebP, GIF, MP4, WebM, and MOV files up to {MAX_MEDIA_SIZE_MB}MB. Up to {MAX_ARTIST_MEDIA_ITEMS} media items total.
           </p>
         </div>
 
-        <ProfilePhotoCropModal
-          open={photoCropOpen}
-          file={pendingPhotoFile}
-          busyState={photoBusyState}
-          error={photoError || null}
-          onCancel={() => {
-            setPhotoCropOpen(false)
-            setPendingPhotoFile(null)
-            setPhotoBusyState(null)
-            setPhotoError('')
-            if (dpFileRef.current) dpFileRef.current.value = ''
-          }}
-          onConfirm={handleCropConfirm}
-        />
+        {(photoCropOpen || Boolean(pendingPhotoFile)) ? (
+          <ProfilePhotoCropModal
+            open={photoCropOpen}
+            file={pendingPhotoFile}
+            busyState={photoBusyState}
+            error={photoError || null}
+            onCancel={() => {
+              setPhotoCropOpen(false)
+              setPendingPhotoFile(null)
+              setPhotoBusyState(null)
+              setPhotoError('')
+              if (dpFileRef.current) dpFileRef.current.value = ''
+            }}
+            onConfirm={handleCropConfirm}
+          />
+        ) : null}
 
         {photoToast ? (
           <div className="pointer-events-none fixed bottom-5 right-5 z-50 max-w-sm">
